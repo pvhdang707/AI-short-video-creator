@@ -1,0 +1,148 @@
+{
+  "items": [
+    {
+      "id": "1",
+      "title": "Mountain Landscape",
+      "image": "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1470&q=80",
+      "topic": "Landscape",
+      "type": "image",
+      "mediaUrl": "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1470&q=80",
+      "prompt": "A serene mountain landscape with snow-capped peaks",
+      "options": {
+        "model": "Stable Diffusion",
+        "style": "Photorealistic",
+        "resolution": "1024x1024"
+      },
+      "likes": 1234,
+      "views": 5678,
+      "createdAt": "2024-03-15T10:30:00Z",
+      "author": "John Doe"
+    },
+    {
+      "id": "2",
+      "title": "Ocean Sunset",
+      "image": "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1473&q=80",
+      "topic": "Nature",
+      "type": "image",
+      "mediaUrl": "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1473&q=80",
+      "prompt": "Beautiful sunset over calm ocean waters",
+      "options": {
+        "model": "Midjourney",
+        "style": "Photorealistic",
+        "resolution": "1024x1024"
+      },
+      "likes": 2345,
+      "views": 6789,
+      "createdAt": "2024-03-14T15:45:00Z",
+      "author": "Jane Smith"
+    },
+    {
+      "id": "3",
+      "title": "City Lights",
+      "image": "https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1474&q=80",
+      "topic": "City",
+      "type": "image",
+      "mediaUrl": "https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1474&q=80",
+      "prompt": "Night cityscape with glowing lights",
+      "options": {
+        "model": "DALL-E 3",
+        "style": "Photorealistic",
+        "resolution": "2048x1024"
+      },
+      "likes": 3456,
+      "views": 7890,
+      "createdAt": "2024-03-13T20:15:00Z",
+      "author": "Mike Johnson"
+    },
+    {
+      "id": "4",
+      "title": "Forest Path",
+      "image": "https://images.unsplash.com/photo-1441974231531-c6227db76b6e?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1471&q=80",
+      "topic": "Nature",
+      "type": "image",
+      "mediaUrl": "https://images.unsplash.com/photo-1441974231531-c6227db76b6e?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1471&q=80",
+      "prompt": "Mystical forest path with morning fog",
+      "options": {
+        "model": "Stable Diffusion",
+        "style": "Fantasy",
+        "resolution": "1024x1024"
+      },
+      "likes": 4567,
+      "views": 8901,
+      "createdAt": "2024-03-12T09:20:00Z",
+      "author": "Sarah Wilson"
+    },
+    {
+      "id": "5",
+      "title": "Desert Dunes",
+      "image": "https://images.unsplash.com/photo-1509316785289-025f5b846b35?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1476&q=80",
+      "topic": "Landscape",
+      "type": "image",
+      "mediaUrl": "https://images.unsplash.com/photo-1509316785289-025f5b846b35?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1476&q=80",
+      "prompt": "Golden desert dunes at sunset",
+      "options": {
+        "model": "Midjourney",
+        "style": "Photorealistic",
+        "resolution": "1024x1024"
+      },
+      "likes": 5678,
+      "views": 9012,
+      "createdAt": "2024-03-11T14:10:00Z",
+      "author": "Alex Brown"
+    },
+    {
+      "id": "6",
+      "title": "Waterfall",
+      "image": "https://images.unsplash.com/photo-1497436072909-60f360e1d4b1?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1472&q=80",
+      "topic": "Nature",
+      "type": "image",
+      "mediaUrl": "https://images.unsplash.com/photo-1497436072909-60f360e1d4b1?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1472&q=80",
+      "prompt": "Majestic waterfall in tropical forest",
+      "options": {
+        "model": "DALL-E 3",
+        "style": "Photorealistic",
+        "resolution": "2048x1024"
+      },
+      "likes": 6789,
+      "views": 1234,
+      "createdAt": "2024-03-10T11:30:00Z",
+      "author": "Emma Davis"
+    },
+    {
+      "id": "7",
+      "title": "Northern Lights",
+      "image": "https://images.unsplash.com/photo-1483347756197-71ef80a95feb?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1470&q=80",
+      "topic": "Night",
+      "type": "image",
+      "mediaUrl": "https://images.unsplash.com/photo-1483347756197-71ef80a95feb?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1470&q=80",
+      "prompt": "Aurora borealis dancing in the night sky",
+      "options": {
+        "model": "Stable Diffusion",
+        "style": "Photorealistic",
+        "resolution": "1024x1024"
+      },
+      "likes": 7890,
+      "views": 2345,
+      "createdAt": "2024-03-09T22:45:00Z",
+      "author": "Tom Wilson"
+    },
+    {
+      "id": "8",
+      "title": "Autumn Colors",
+      "image": "https://images.unsplash.com/photo-1507783548227-544c3b8fc065?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1470&q=80",
+      "topic": "Nature",
+      "type": "image",
+      "mediaUrl": "https://images.unsplash.com/photo-1507783548227-544c3b8fc065?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1470&q=80",
+      "prompt": "Vibrant autumn colors in a forest",
+      "options": {
+        "model": "Midjourney",
+        "style": "Photorealistic",
+        "resolution": "1024x1024"
+      },
+      "likes": 8901,
+      "views": 3456,
+      "createdAt": "2024-03-08T16:20:00Z",
+      "author": "Lisa Anderson"
+    }
+  ]
+} 
