@@ -9,10 +9,30 @@ import Step3_Images from "./ImageGenerator";
 // pages/CreateVideo/index.jsx
 const CreateVideo = () => {
   const [step, setStep] = useState(1);
-  const [projectData, setProjectData] = useState({});
+  const [projectData, setProjectData] = useState({
+    script: null,
+    voice: null,
+    images: null
+  });
 
   const nextStep = (data) => {
-    setProjectData({ ...projectData, ...data });
+    // Cập nhật dữ liệu tương ứng với từng bước
+    if (step === 1) {
+      setProjectData(prev => ({
+        ...prev,
+        script: data
+      }));
+    } else if (step === 2) {
+      setProjectData(prev => ({
+        ...prev,
+        voice: data
+      }));
+    } else if (step === 3) {
+      setProjectData(prev => ({
+        ...prev,
+        images: data
+      }));
+    }
     setStep(step + 1);
   };
 
@@ -23,7 +43,12 @@ const CreateVideo = () => {
   return (
     <div className="min-h-screen w-full bg-gradient-to-br from-gray-900 to-gray-800">
       <div className="container w-full h-full p-4 mx-auto">
-        {step === 1 && <Step1_Script onNext={nextStep} />}
+        {step === 1 && (
+          <Step1_Script 
+            onNext={nextStep} 
+            initialScript={projectData.script} 
+          />
+        )}
         {step === 2 && (
           <Step2_Voice 
             script={projectData.script} 

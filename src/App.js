@@ -1,5 +1,6 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
 import MainLayout from './components/MainLayout';
 import LogInPage from './pages/Login/Login';
 import CreateVideoPage from './pages/CreateVideo/CreateVideo';
@@ -10,20 +11,61 @@ import Gallery from './pages/Gallery/Gallery';
 import SignUpPage from './pages/SignUp/SignUp';
 import ItemDetail from './pages/ItemDetail/ItemDetail';
 
+// Protected Route Component
+const ProtectedRoute = ({ children }) => {
+  const { user, loading } = useAuth();
+  
+  if (loading) {
+    return <div>Loading...</div>;
+  }
+  
+  if (!user) {
+    return <Navigate to="/login" />;
+  }
+  
+  return children;
+};
+
 const App = () => {
   return (
-    <Router>
-      <Routes>
-        <Route path="/login" element={<LogInPage />} />
-        <Route path="/signup" element={<SignUpPage />} />
-        <Route path="/" element={<MainLayout><Explore /></MainLayout>} />
-        <Route path="/explore" element={<MainLayout><Explore /></MainLayout>} />
-        <Route path="/gallery" element={<MainLayout><Gallery /></MainLayout>} />
-        <Route path="/create-video/*" element={<MainLayout><CreateVideoPage /></MainLayout>} />
-        {/* <Route path="/create-image/*" element={<MainLayout><CreateImage /></MainLayout>} /> */}
-        <Route path="/item/:id" element={<ItemDetail />} />
-      </Routes>
-    </Router>
+    <AuthProvider>
+      <Router>
+        <Routes>
+          <Route path="/login" element={<LogInPage />} />
+          <Route path="/signup" element={<SignUpPage />} />
+          <Route path="/" element={<MainLayout><Explore /></MainLayout>} />
+          <Route path="/explore" element={<MainLayout><Explore /></MainLayout>} />
+          <Route path="/gallery" element={<MainLayout><Gallery /></MainLayout>} />
+          <Route path="/create-video/*" element={<MainLayout><CreateVideoPage /></MainLayout>} />
+          {/* <Route path="/create-image/*" element={<MainLayout><CreateImage /></MainLayout>} /> */}
+          <Route path="/item/:id" element={<ItemDetail />} />
+          <Route
+            path="/"
+            element={
+              <ProtectedRoute>
+                <MainLayout><Gallery /></MainLayout>
+              </ProtectedRoute>
+            }
+          />
+          {/* <Route
+            path="/video-script"
+            element={
+              <ProtectedRoute>
+                <MainLayout><VideoScript /></MainLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/profile"
+            element={
+              <ProtectedRoute>
+                <MainLayout><Profile /></MainLayout>
+              </ProtectedRoute>
+            }
+          /> */}
+        </Routes>
+      </Router>
+    </AuthProvider>
   );
 };
 

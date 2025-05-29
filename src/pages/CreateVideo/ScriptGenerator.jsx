@@ -1,112 +1,391 @@
 // pages/CreateVideo/Step1_Script.jsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import StepProgress from '../../components/StepProgress/StepProgress';
 import PromptInput from '../../components/PromptInput/PromptInput';
+import { videoScriptAPI } from '../../services/api';
 //import { VIDEO_STEPS } from '../../constants';
 //import { generateScript } from '../../services/scriptService';
 
-const Step1_Script = ({ onNext }) => {
-    const [option, setOption] = useState('ai'); // 'manual' hoặc 'ai'
+const Step1_Script = ({ onNext, initialScript }) => {
     const [script, setScript] = useState('');
     const [isGenerating, setIsGenerating] = useState(false);
     const [prompt, setPrompt] = useState('');
+    const [formData, setFormData] = useState({
+      topic: '',
+      target_audience: 'Người dùng các mạng xã hội',
+      duration: 0, // Thời lượng mặc định 
+    });
+    const [error, setError] = useState(null);
+    const [generatedScript, setGeneratedScript] = useState(null);
+    const [hasChanges, setHasChanges] = useState(false);
+    const [originalScript, setOriginalScript] = useState('');
+    const [isSaving, setIsSaving] = useState(false);
+    const [saveSuccess, setSaveSuccess] = useState(false);
+    const [isEnhancing, setIsEnhancing] = useState(false);
   
-    const handleGenerate = async () => {
-      if (!prompt) return;
-      
-      setIsGenerating(true);
-      try {
-        // TODO: Gọi API generate script ở đây
-        // const generatedScript = await generateScript(prompt);
-        // setScript(generatedScript);
-        
-        // Tạm thời dùng setTimeout để demo
-        setTimeout(() => {
-          setScript(`This is the script generated from the prompt: "${prompt}"`);
-          setIsGenerating(false);
-        }, 2000);
-      } catch (error) {
-        console.error('Error generating script:', error);
-        setIsGenerating(false);
-      }
-    };
+    // Khôi phục script khi quay lại bước này
+    useEffect(() => {
+        if (initialScript) {
+            setGeneratedScript(initialScript);
+            const formattedScript = formatScriptForDisplay(initialScript);
+            setScript(formattedScript);
+            setOriginalScript(formattedScript);
+        }
+    }, [initialScript]);
 
     const handlePromptChange = (e) => {
       if (e && e.target) {
         setPrompt(e.target.value);
+        // Cập nhật topic khi người dùng nhập idea
+        setFormData(prev => ({
+          ...prev,
+          topic: e.target.value
+        }));
       }
     };
-  
-    return (
-      <div>
-        {/*<StepProgress currentStep={1} steps={VIDEO_STEPS} />*/}
-        <StepProgress currentStep={1}  />
+
+    const handleGenerate = async () => {
+      if (!prompt) return;
+      
+      setIsGenerating(true);
+      setError(null);
+
+      try {
+        const response = await videoScriptAPI.generateScript(formData);
+        setGeneratedScript(response.data);
+        // Format script để hiển thị
+        const formattedScript = formatScriptForDisplay(response.data);
+        setScript(formattedScript);
+      } catch (err) {
+        setError(err.response?.data?.detail || 'Có lỗi xảy ra khi tạo kịch bản');
+      } finally {
+        setIsGenerating(false);
+      }
+    };
+
+    const formatScriptForDisplay = (scriptData) => {
+        if (!scriptData) return '';
+
+        // in id
+        console.log(scriptData.id);
         
-        <div className="grid grid-cols-2 gap-4 mb-6">
-          <button 
-            onClick={() => setOption('ai')}
-            className={`p-4 rounded-lg ${option === 'ai' ? 'border-2 border-blue-500' : 'border border-gray-300'}`}
-          >
-            AI Suggest script
-          </button>
-          <button 
-            onClick={() => setOption('manual')}
-            className={`p-4 rounded-lg ${option === 'manual' ? 'border-2 border-blue-500' : 'border border-gray-300'}`}
-          >
-            Enter your script
-          </button>
-        </div>
-  
-        {option === 'manual' ? (
-          <textarea
-            value={script}
-            onChange={(e) => setScript(e.target.value)}
-            className="w-full h-64 px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-4 focus:border-blue-500 border-2 border-gray-600 resize-y transition-all duration-300 bg-gradient-to-br from-gray-900 to-gray-800 transition"
-            placeholder="Enter your script here..."
-          />
-        ) : (
-          <div className="space-y-4">
-            <div className="flex gap-4">
-              <PromptInput
-                value={prompt}
-                onChange={handlePromptChange}
-                placeholder="Enter your idea for the video..."
-                className="flex-1"
-              />
+        let formattedText = `Tiêu đề: ${scriptData.title}\n\n`;
+        formattedText += `Mô tả: ${scriptData.description}\n\n`;
+        formattedText += `Thời lượng: ${scriptData.total_duration} giây\n\n`;
+        formattedText += `Các cảnh:\n\n`;
+
+        scriptData.scenes.forEach((scene, index) => {
+            formattedText += `Cảnh ${index + 1}:\n`;
+            formattedText += `- Mô tả: ${scene.description}\n`;
+            formattedText += `- Thời lượng: ${scene.duration} giây\n`;
+            formattedText += `- Giọng đọc: ${scene.voice_over}\n`;
+            formattedText += `- Yếu tố hình ảnh: ${scene.visual_elements}\n`;
+            formattedText += `- Nhạc nền: ${scene.background_music}\n\n`;
+        });
+
+        return formattedText;
+    };
+
+    const handleScriptEdit = (e) => {
+        setScript(e.target.value);
+        setHasChanges(e.target.value !== originalScript);
+    };
+
+    const parseEditedScript = (editedText) => {
+        try {
+            const lines = editedText.split('\n');
+            const updatedScript = { ...generatedScript };
+            
+            // Parse tiêu đề
+            const titleMatch = lines[0].match(/Tiêu đề: (.*)/);
+            if (titleMatch) updatedScript.title = titleMatch[1];
+
+            // Parse mô tả
+            const descMatch = lines[2].match(/Mô tả: (.*)/);
+            if (descMatch) updatedScript.description = descMatch[1];
+
+            // Parse thời lượng
+            const durationMatch = lines[4].match(/Thời lượng: (\d+) giây/);
+            if (durationMatch) updatedScript.total_duration = parseInt(durationMatch[1]);
+
+            // Parse các cảnh
+            const scenes = [];
+            let currentScene = null;
+            let sceneIndex = 0;
+
+            for (let i = 6; i < lines.length; i++) {
+                const line = lines[i].trim();
+                
+                if (line.startsWith('Cảnh')) {
+                    if (currentScene) scenes.push(currentScene);
+                    currentScene = {
+                        description: '',
+                        duration: 0,
+                        voice_over: '',
+                        visual_elements: '',
+                        background_music: ''
+                    };
+                    sceneIndex++;
+                } else if (currentScene) {
+                    if (line.startsWith('- Mô tả:')) {
+                        currentScene.description = line.replace('- Mô tả:', '').trim();
+                    } else if (line.startsWith('- Thời lượng:')) {
+                        const durationMatch = line.match(/- Thời lượng: (\d+) giây/);
+                        if (durationMatch) currentScene.duration = parseInt(durationMatch[1]);
+                    } else if (line.startsWith('- Giọng đọc:')) {
+                        currentScene.voice_over = line.replace('- Giọng đọc:', '').trim();
+                    } else if (line.startsWith('- Yếu tố hình ảnh:')) {
+                        currentScene.visual_elements = line.replace('- Yếu tố hình ảnh:', '').trim();
+                    } else if (line.startsWith('- Nhạc nền:')) {
+                        currentScene.background_music = line.replace('- Nhạc nền:', '').trim();
+                    }
+                }
+            }
+            if (currentScene) scenes.push(currentScene);
+            
+            updatedScript.scenes = scenes;
+            return updatedScript;
+        } catch (error) {
+            console.error('Lỗi khi parse script:', error);
+            return generatedScript;
+        }
+    };
+
+    const handleNext = () => {
+        if (generatedScript) {
+            if (hasChanges) {
+                const updatedScript = parseEditedScript(script);
+                onNext(updatedScript);
+            } else {
+                onNext(generatedScript);
+            }
+        }
+    };
+
+    const handleReset = () => {
+        setScript(originalScript);
+        setHasChanges(false);
+    };
+
+    const handleSaveChanges = async () => {
+        if (!hasChanges) return;
+        
+        setIsSaving(true);
+        setSaveSuccess(false);
+        
+        try {
+            const updatedScript = parseEditedScript(script);
+            // Cập nhật generatedScript với phiên bản mới
+            setGeneratedScript(updatedScript);
+            setOriginalScript(script);
+            setHasChanges(false);
+            setSaveSuccess(true);
+            
+            // Tự động ẩn thông báo thành công sau 3 giây
+            setTimeout(() => {
+                setSaveSuccess(false);
+            }, 3000);
+        } catch (error) {
+            console.error('Lỗi khi lưu thay đổi:', error);
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    const handleEnhance = async () => {
+        if (!generatedScript) return;
+        
+        setIsEnhancing(true);
+        setError(null);
+
+        try {
+            const response = await videoScriptAPI.enhanceScript(generatedScript);
+            const enhancedScript = response.data;
+            setGeneratedScript(enhancedScript);
+            const formattedScript = formatScriptForDisplay(enhancedScript);
+            setScript(formattedScript);
+            setOriginalScript(formattedScript);
+            setHasChanges(false);
+        } catch (err) {
+            setError(err.response?.data?.detail || 'Có lỗi xảy ra khi cải thiện kịch bản');
+        } finally {
+            setIsEnhancing(false);
+        }
+    };
+
+    return (
+        <div className="min-h-screen bg-gray-900 text-white p-6">
+            <div className="max-w-[90rem] mx-auto space-y-8">
+                {/* Header với Step Progress */}
+                <div className="bg-gray-800/50 p-6 rounded-xl shadow-lg">
+                    <StepProgress currentStep={1} />
+                    <h1 className="text-2xl font-bold mt-4 text-center">Tạo kịch bản cho video</h1>
+                    <p className="text-gray-400 text-center mt-2">
+                        Hệ thống sẽ tự động tạo kịch bản dựa trên ý tưởng của bạn
+                    </p>
+                </div>
+
+                {/* Main Content */}
+                <div className="bg-gray-800/50 rounded-xl p-8 shadow-lg">
+                    <div className="space-y-6">
+                        {/* Prompt Input */}
+                        <div className="space-y-4">
+                            <PromptInput
+                                value={prompt}
+                                onChange={handlePromptChange}
+                                placeholder="Nhập ý tưởng cho video của bạn..."
+                                className="w-full bg-gray-900/50 border border-gray-700 rounded-lg p-4 text-white placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            />
+                            <div className="flex justify-end">
+                                <button
+                                    onClick={handleGenerate}
+                                    disabled={!prompt || isGenerating}
+                                    className="px-6 py-3 bg-blue-600 text-white rounded-lg disabled:opacity-50 
+                                             hover:bg-blue-700 transition-colors duration-200 flex items-center justify-center gap-2"
+                                >
+                                    {isGenerating ? (
+                                        <>
+                                            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                                            <span>Đang tạo kịch bản...</span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                                            </svg>
+                                            <span>Tạo kịch bản</span>
+                                        </>
+                                    )}
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Error Message */}
+                        {error && (
+                            <div className="bg-red-500/10 border border-red-500 text-red-500 p-4 rounded-lg">
+                                <div className="flex items-center gap-2">
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                    <span>{error}</span>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Generated Script */}
+                        {script && (
+                            <div className="space-y-4">
+                                <div className="flex justify-between items-center">
+                                    <h3 className="text-xl font-semibold text-blue-400">Kịch bản đã tạo:</h3>
+                                    <div className="flex items-center gap-4">
+                                        <button
+                                            onClick={handleEnhance}
+                                            disabled={isEnhancing}
+                                            className="px-4 py-2 text-sm bg-purple-600 text-white rounded-lg 
+                                                     hover:bg-purple-700 transition-colors disabled:opacity-50
+                                                     flex items-center gap-2"
+                                        >
+                                            {isEnhancing ? (
+                                                <>
+                                                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                                                    <span>Đang cải thiện...</span>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
+                                                              d="M13 10V3L4 14h7v7l9-11h-7z" />
+                                                    </svg>
+                                                    <span>Cải thiện kịch bản</span>
+                                                </>
+                                            )}
+                                        </button>
+                                        {hasChanges && (
+                                            <>
+                                                <button
+                                                    onClick={handleReset}
+                                                    className="px-4 py-2 text-sm text-gray-400 hover:text-white transition-colors"
+                                                >
+                                                    Khôi phục bản gốc
+                                                </button>
+                                                <button
+                                                    onClick={handleSaveChanges}
+                                                    disabled={isSaving}
+                                                    className="px-4 py-2 text-sm bg-green-600 text-white rounded-lg 
+                                                             hover:bg-green-700 transition-colors disabled:opacity-50
+                                                             flex items-center gap-2"
+                                                >
+                                                    {isSaving ? (
+                                                        <>
+                                                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                                                            <span>Đang lưu...</span>
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
+                                                                      d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+                                                            </svg>
+                                                            <span>Lưu thay đổi</span>
+                                                        </>
+                                                    )}
+                                                </button>
+                                            </>
+                                        )}
+                                    </div>
+                                </div>
+                                <div className="bg-gray-900/50 p-6 rounded-lg">
+                                    <textarea
+                                        value={script}
+                                        onChange={handleScriptEdit}
+                                        className="w-full h-[500px] p-6 bg-gray-800/50 border border-gray-700 rounded-lg 
+                                                 text-gray-300 font-mono text-base resize-y focus:ring-2 focus:ring-blue-500 
+                                                 focus:border-transparent leading-relaxed"
+                                        placeholder="Kịch bản sẽ được hiển thị ở đây..."
+                                    />
+                                    <div className="flex justify-between items-center mt-4">
+                                        <p className="text-sm text-gray-500">
+                                            Bạn có thể chỉnh sửa kịch bản hoặc sử dụng nút "Cải thiện" để làm cho kịch bản chi tiết hơn
+                                        </p>
+                                        <div className="flex items-center gap-2">
+                                            {hasChanges && (
+                                                <span className="text-sm text-yellow-400">
+                                                    Có thay đổi chưa lưu
+                                                </span>
+                                            )}
+                                            {saveSuccess && (
+                                                <span className="text-sm text-green-400 flex items-center gap-1">
+                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
+                                                              d="M5 13l4 4L19 7" />
+                                                    </svg>
+                                                    Đã lưu thành công
+                                                </span>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                {/* Navigation Buttons */}
+                <div className="flex justify-end">
+                    <button 
+                        onClick={handleNext}
+                        disabled={!script}
+                        className="px-6 py-3 bg-blue-600 text-white rounded-lg disabled:opacity-50 
+                                 hover:bg-blue-700 transition-colors duration-200 flex items-center gap-2"
+                    >
+                        <span>Tiếp tục</span>
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                        </svg>
+                    </button>
+                </div>
             </div>
-            <div className="flex justify-end">
-              <button
-                onClick={handleGenerate}
-                disabled={!prompt || isGenerating}
-                className="px-6 py-2 bg-blue-600 text-white rounded-lg disabled:opacity-50 whitespace-nowrap"
-              >
-                {isGenerating ? 'Generating...' : 'Generate'}
-              </button>
-            </div>
-            {script && (
-              <div className="mt-4">
-                <h3 className="font-bold mb-2">Script generated:</h3>
-                <textarea
-                  value={script}
-                  onChange={(e) => setScript(e.target.value)}
-                  className="w-full h-64 p-4 border border-gray-300 rounded-lg bg-gradient-to-br from-gray-900 to-gray-800 transition"
-                  placeholder="The script will be displayed here..."
-                />
-              </div>
-            )}
-          </div>
-        )}
-  
-        <div className="flex justify-end mt-4">
-          <button 
-            onClick={() => onNext({ script })}
-            disabled={!script}
-            className="px-6 py-2 bg-blue-600 text-white rounded-lg disabled:opacity-50"
-          >
-            Next
-          </button>
         </div>
-      </div>
     );
 };
 
