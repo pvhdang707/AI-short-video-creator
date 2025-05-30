@@ -219,9 +219,9 @@ const Step1_Script = ({ onNext, initialScript }) => {
                 {/* Header với Step Progress */}
                 <div className="bg-gray-800/50 p-6 rounded-xl shadow-lg">
                     <StepProgress currentStep={1} />
-                    <h1 className="text-2xl font-bold mt-4 text-center">Tạo kịch bản cho video</h1>
+                    <h1 className="text-2xl font-bold mt-4 text-center">Create Video Script</h1>
                     <p className="text-gray-400 text-center mt-2">
-                        Hệ thống sẽ tự động tạo kịch bản dựa trên ý tưởng của bạn
+                        The system will automatically generate a script based on your idea
                     </p>
                 </div>
 
@@ -233,7 +233,7 @@ const Step1_Script = ({ onNext, initialScript }) => {
                             <PromptInput
                                 value={prompt}
                                 onChange={handlePromptChange}
-                                placeholder="Nhập ý tưởng cho video của bạn..."
+                                placeholder="Enter your video idea..."
                                 className="w-full bg-gray-900/50 border border-gray-700 rounded-lg p-4 text-white placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                             />
                             <div className="flex justify-end">
@@ -246,14 +246,14 @@ const Step1_Script = ({ onNext, initialScript }) => {
                                     {isGenerating ? (
                                         <>
                                             <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                                            <span>Đang tạo kịch bản...</span>
+                                            <span>Generating script...</span>
                                         </>
                                     ) : (
                                         <>
                                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                                             </svg>
-                                            <span>Tạo kịch bản</span>
+                                            <span>Generate Script</span>
                                         </>
                                     )}
                                 </button>
@@ -276,7 +276,7 @@ const Step1_Script = ({ onNext, initialScript }) => {
                         {script && (
                             <div className="space-y-4">
                                 <div className="flex justify-between items-center">
-                                    <h3 className="text-xl font-semibold text-blue-400">Kịch bản đã tạo:</h3>
+                                    <h3 className="text-xl font-semibold text-blue-400">Generated Script:</h3>
                                     <div className="flex items-center gap-4">
                                         <button
                                             onClick={handleEnhance}
@@ -288,7 +288,7 @@ const Step1_Script = ({ onNext, initialScript }) => {
                                             {isEnhancing ? (
                                                 <>
                                                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                                                    <span>Đang cải thiện...</span>
+                                                    <span>Enhancing...</span>
                                                 </>
                                             ) : (
                                                 <>
@@ -296,7 +296,7 @@ const Step1_Script = ({ onNext, initialScript }) => {
                                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
                                                               d="M13 10V3L4 14h7v7l9-11h-7z" />
                                                     </svg>
-                                                    <span>Cải thiện kịch bản</span>
+                                                    <span>Enhance Script</span>
                                                 </>
                                             )}
                                         </button>
@@ -306,7 +306,7 @@ const Step1_Script = ({ onNext, initialScript }) => {
                                                     onClick={handleReset}
                                                     className="px-4 py-2 text-sm text-gray-400 hover:text-white transition-colors"
                                                 >
-                                                    Khôi phục bản gốc
+                                                    <span>Restore Original</span>
                                                 </button>
                                                 <button
                                                     onClick={handleSaveChanges}
@@ -318,7 +318,7 @@ const Step1_Script = ({ onNext, initialScript }) => {
                                                     {isSaving ? (
                                                         <>
                                                             <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                                                            <span>Đang lưu...</span>
+                                                            <span>Saving...</span>
                                                         </>
                                                     ) : (
                                                         <>
@@ -326,7 +326,7 @@ const Step1_Script = ({ onNext, initialScript }) => {
                                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
                                                                       d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
                                                             </svg>
-                                                            <span>Lưu thay đổi</span>
+                                                            <span>Save Changes</span>
                                                         </>
                                                     )}
                                                 </button>
@@ -345,12 +345,12 @@ const Step1_Script = ({ onNext, initialScript }) => {
                                     />
                                     <div className="flex justify-between items-center mt-4">
                                         <p className="text-sm text-gray-500">
-                                            Bạn có thể chỉnh sửa kịch bản hoặc sử dụng nút "Cải thiện" để làm cho kịch bản chi tiết hơn
+                                            You can edit the script or use the "Enhance" button to make the script more detailed
                                         </p>
                                         <div className="flex items-center gap-2">
                                             {hasChanges && (
                                                 <span className="text-sm text-yellow-400">
-                                                    Có thay đổi chưa lưu
+                                                    Unsaved changes
                                                 </span>
                                             )}
                                             {saveSuccess && (
@@ -359,7 +359,7 @@ const Step1_Script = ({ onNext, initialScript }) => {
                                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
                                                               d="M5 13l4 4L19 7" />
                                                     </svg>
-                                                    Đã lưu thành công
+                                                    Saved successfully
                                                 </span>
                                             )}
                                         </div>
@@ -378,7 +378,7 @@ const Step1_Script = ({ onNext, initialScript }) => {
                         className="px-6 py-3 bg-blue-600 text-white rounded-lg disabled:opacity-50 
                                  hover:bg-blue-700 transition-colors duration-200 flex items-center gap-2"
                     >
-                        <span>Tiếp tục</span>
+                        <span>Continue</span>
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                         </svg>
