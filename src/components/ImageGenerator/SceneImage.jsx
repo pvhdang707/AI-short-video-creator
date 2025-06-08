@@ -27,7 +27,7 @@ const SceneImage = ({ sceneImage, sceneNumber, isRegenerating }) => {
                 )}
             </div>
 
-            {sceneImage && (
+            {/* {sceneImage && (
                 <div className="bg-gray-900/50 p-4 rounded-lg space-y-3">
                     <div>
                         <h4 className="text-sm font-medium text-gray-400 mb-1">Prompt:</h4>
@@ -37,7 +37,7 @@ const SceneImage = ({ sceneImage, sceneNumber, isRegenerating }) => {
                         <span>Size: {sceneImage.width}x{sceneImage.height}</span>
                     </div>
                 </div>
-            )}
+            )} */}
         </div>
     );
 };

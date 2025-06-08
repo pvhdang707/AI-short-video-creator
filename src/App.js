@@ -10,7 +10,7 @@ import Gallery from './pages/Gallery/Gallery';
 // import CreateImage from './pages/CreateImage/CreateImage';
 import SignUpPage from './pages/SignUp/SignUp';
 import ItemDetail from './pages/ItemDetail/ItemDetail';
-
+import CreateVideoV2 from './pages/CreateVideo/V2';
 // Protected Route Component
 const ProtectedRoute = ({ children }) => {
   const { user, loading } = useAuth();
@@ -37,7 +37,7 @@ const App = () => {
           <Route path="/explore" element={<MainLayout><Explore /></MainLayout>} />
           <Route path="/gallery" element={<MainLayout><Gallery /></MainLayout>} />
           <Route path="/create-video/*" element={<MainLayout><CreateVideoPage /></MainLayout>} />
-          {/* <Route path="/create-image/*" element={<MainLayout><CreateImage /></MainLayout>} /> */}
+          <Route path="/create-video-v2" element={<MainLayout><CreateVideoV2 /></MainLayout>} />
           <Route path="/item/:id" element={<ItemDetail />} />
           <Route
             path="/"

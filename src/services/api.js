@@ -49,10 +49,11 @@ export const voiceAPI = {
 export const imageAPI = {
   generateImage: (data) => api.post('/images/generate', data),
   generateImagesForScript: (scriptId) => api.post(`/images/generate-for-script/${scriptId}`),
-  generateImageForScene: (scriptId, sceneIndex, prompt) => api.post(`/images/generate-for-scene/${scriptId}`, {
-    scene_index: sceneIndex,
-    prompt: prompt
-  })
+};
+
+// Video APIs
+export const videoAPI = {
+  createVideo: (scriptId) => api.post('/videos/create-video', { script_id: scriptId }),
 };
 
 export default api; 

@@ -18,6 +18,7 @@ const Sidebar = () => {
       title: "AI Create",
       items: [
         { name: 'Create Video', path: '/create-video' },
+        { name: 'Create Video V2', path: '/create-video-v2' },
         // { name: 'Create Image', path: '/create-image/image-generation' },
       ]
     },
