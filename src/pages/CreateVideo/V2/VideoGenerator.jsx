@@ -145,13 +145,33 @@ const VideoGenerator = ({ content = [], onBack }) => {
     console.log('Script đã được nhận và lưu vào state');
   };
 
+  // upload script
+  const handleUploadScript = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const script = JSON.parse(e.target.result);
+        setCurrentScript(script);
+      };
+      reader.readAsText(file);
+    }
+  };
+
   return (
     <div className="video-generator">
+
+      {/*<div className="flex flex-col items-center justify-center">
+       //upload script 
+      <input type="file" accept=".json" onChange={handleUploadScript} />
+      <button onClick={handleGenerateFromScript}>Generate from script</button>
+
+      </div>*/}
       <TimelineUI 
         content={content} 
         onExportScript={handleExportScript}
         ffmpeg={ffmpeg}
-      />
+      /> 
       
       {videoUrl && (
         <div className="video-preview mt-4 mb-4">

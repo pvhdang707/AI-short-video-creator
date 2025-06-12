@@ -1,5 +1,5 @@
 import { FFmpeg } from '@ffmpeg/ffmpeg';
-import { applyImageFilters, createAdvancedTextOverlay, processAdvancedAudio, createImageOverlay } from './overlayUtils';
+import { applyImageFilters, createAdvancedTextOverlay, processAdvancedAudio, createImageOverlay, createTextOverlayFilter } from './overlayUtils';
 
 // Hàm tạo video từ script
 export const generateVideoFromScript = async (ffmpeg, script, onProgress) => {
@@ -21,7 +21,9 @@ export const generateVideoFromScript = async (ffmpeg, script, onProgress) => {
       console.log(`Đang xử lý scene ${i + 1}/${scenes.length}`);
 
       // Xác định thời lượng scene
-      let sceneDuration = scene.duration || 5; // Sử dụng thời lượng từ script hoặc mặc định      // Tải và xử lý ảnh
+      let sceneDuration = scene.duration || 5;
+
+      // Tải và xử lý ảnh
       try {
         console.log(`Bắt đầu tải ảnh cho scene ${i + 1} từ nguồn:`, scene.image.source);
         const imageResponse = await fetch(scene.image.source);
@@ -48,7 +50,6 @@ export const generateVideoFromScript = async (ffmpeg, script, onProgress) => {
       if (scene.audio) {
         try {
           console.log(`Đang xử lý audio nâng cao cho scene ${i + 1}`);
-          // Sử dụng hàm xử lý audio nâng cao
           audioPath = await processAdvancedAudio(
             ffmpeg, 
             scene.audio.source, 
@@ -75,78 +76,47 @@ export const generateVideoFromScript = async (ffmpeg, script, onProgress) => {
       // Tạo filter string cho scene
       const imageFilters = [];
       if (scene.image?.filters) {
-        // Sử dụng hàm applyImageFilters từ overlayUtils để xử lý các bộ lọc hình ảnh
         const imageFilterString = applyImageFilters(scene.image.filters);
         if (imageFilterString) {
           imageFilters.push(imageFilterString);
         }
-      }    // Xử lý overlays
-    let overlayFilters = [];
-    try {
-        // Kiểm tra font trước khi xử lý overlays
-        console.log(`Scene ${i + 1}: Checking if required font file exists before processing overlays...`);
-        try {
-          const fontCheck = await ffmpeg.readFile('arial.ttf');
-          if (!fontCheck || fontCheck.byteLength === 0) {
-            console.error(`Scene ${i + 1}: Font file missing or empty! Attempting to reload font...`);
-            
-            // Try to reload font if missing
-            const fontResponse = await fetch('/fonts/ARIAL.TTF');
-            if (fontResponse.ok) {
-              const fontData = await fontResponse.arrayBuffer();
-              await ffmpeg.writeFile('arial.ttf', new Uint8Array(fontData));
-              console.log(`Scene ${i + 1}: Font reloaded successfully`);
-            }
-          } else {
-            console.log(`Scene ${i + 1}: Font file verified (${fontCheck.byteLength} bytes)`);
-          }
-        } catch (e) {
-          console.error(`Scene ${i + 1}: Error checking font file:`, e);
-        }
-        
-        // Kiểm tra và tiền xử lý tọa độ cho text overlays nếu cần
-        if (scene.overlays && scene.overlays.length > 0) {
-          console.log(`Scene ${i + 1}: Preprocessing text overlay positions...`);
-          
-          // Lấy kích thước output video từ cài đặt script hoặc mặc định
-          const outputResolution = output.resolution || '854x480';
-          const [outputWidth, outputHeight] = outputResolution.split('x').map(Number);
-          
-          // Nếu không có thông tin về preview dimensions, thêm thông tin này vào scene
-          if (!scene.scenePreviewDimensions) {
-            // Giả sử kích thước preview tương đương kích thước output 
-            // hoặc sử dụng giá trị mặc định từ cài đặt người dùng nếu có
-            scene.scenePreviewDimensions = {
-              width: scene.previewWidth || outputWidth,
-              height: scene.previewHeight || outputHeight
-            };
-            
-            console.log(`Scene ${i + 1}: Set default preview dimensions to ${scene.scenePreviewDimensions.width}x${scene.scenePreviewDimensions.height}`);
-          }
-        }
-        
-        // Xử lý và tạo filter cho tất cả các overlays
-        overlayFilters = await processSceneOverlays(scene, i, ffmpeg);
-        console.log(`Scene ${i + 1}: Generated ${overlayFilters.length} overlay filters`);
-    } catch (overlayError) {
-        console.error(`Scene ${i + 1}: Error processing overlays:`, overlayError);
-        console.log(`Scene ${i + 1}: Continuing with empty overlay filters`);
-    }
-    const allFilters = [...imageFilters, ...overlayFilters];
-      
+      }
+
+      // Xử lý overlays
+      const overlayResult = await processSceneOverlays(scene, i, ffmpeg);
+      const overlayFilters = overlayResult.filterComplex;
+      const overlayInputs = overlayResult.inputs;
+
+      // Kết hợp tất cả các filter
+      const allFilters = [...imageFilters];
+      if (overlayFilters) {
+        allFilters.push(overlayFilters);
+      }
+
       // Tạo lệnh FFmpeg cho scene
-      let ffmpegCommand = [
-        '-loop', '1',  // Lặp lại ảnh
+      const ffmpegCommand = [
+        '-loop', '1',
         '-i', `scene_${i}_image.jpg`,
-        '-t', sceneDuration.toString()  // Đặt thời lượng cho scene
+        '-t', sceneDuration.toString()
       ];
 
+      // Thêm audio input nếu có
       if (audioPath) {
         ffmpegCommand.push('-i', audioPath);
       }
 
+      // Thêm các input cho overlay
+      for (const input of overlayInputs) {
+        ffmpegCommand.push('-loop', '1', '-i', input.path);
+      }
+
       if (allFilters.length > 0) {
-        ffmpegCommand.push('-vf', allFilters.join(','));
+        ffmpegCommand.push('-filter_complex', `${allFilters.join(';')}`);
+        // Thêm mapping cho output video và audio
+        ffmpegCommand.push('-map', '[outv]');
+        if (audioPath) {
+          ffmpegCommand.push('-map', '1:a');
+        }
       }
 
       // Thêm các tham số output
@@ -157,10 +127,12 @@ export const generateVideoFromScript = async (ffmpeg, script, onProgress) => {
         '-r', (output.fps || 30).toString(),
         '-s', output.resolution || '854x480',
         '-pix_fmt', 'yuv420p',
-        '-shortest',  // Kết thúc khi stream ngắn nhất kết thúc
+        '-shortest',
         '-y',
         `scene_${i}.mp4`
-      );      // Thực thi lệnh FFmpeg
+      );
+
+      // Thực thi lệnh FFmpeg
       try {
         console.log(`Lệnh FFmpeg cho scene ${i + 1}:`, ffmpegCommand.join(' '));
         await ffmpeg.exec(ffmpegCommand);
@@ -170,35 +142,9 @@ export const generateVideoFromScript = async (ffmpeg, script, onProgress) => {
         try {
           const sceneFile = await ffmpeg.readFile(`scene_${i}.mp4`);
           if (!sceneFile || sceneFile.byteLength === 0) {
-            console.error(`Scene ${i + 1} file not created properly: empty or missing`);
-            
-            // Try a fallback approach with simpler command if the file wasn't created
-            console.log(`Attempting fallback for scene ${i + 1}...`);
-            
-            // Create a simpler command without complex filters
-            const fallbackCommand = [
-              '-loop', '1',
-              '-i', `scene_${i}_image.jpg`,
-              '-t', '5',
-              '-c:v', 'libx264',
-              '-tune', 'stillimage',
-              '-pix_fmt', 'yuv420p',
-              '-y',
-              `scene_${i}.mp4`
-            ];
-            
-            console.log(`Fallback command for scene ${i + 1}:`, fallbackCommand.join(' '));
-            await ffmpeg.exec(fallbackCommand);
-            
-            // Verify the fallback worked
-            const fallbackFile = await ffmpeg.readFile(`scene_${i}.mp4`);
-            if (!fallbackFile || fallbackFile.byteLength === 0) {
-              throw new Error(`Fallback also failed for scene ${i + 1}`);
-            }
-            console.log(`Fallback for scene ${i + 1} successful, file size: ${fallbackFile.byteLength} bytes`);
-          } else {
-            console.log(`Scene ${i + 1} file verified, size: ${sceneFile.byteLength} bytes`);
+            throw new Error(`Scene ${i + 1} file not created properly: empty or missing`);
           }
+          console.log(`Scene ${i + 1} file verified, size: ${sceneFile.byteLength} bytes`);
         } catch (verifyError) {
           console.error(`Error verifying scene ${i + 1} file:`, verifyError);
           throw new Error(`Scene ${i + 1} verification failed: ${verifyError.message}`);
@@ -477,116 +423,174 @@ export const initFFmpeg = async () => {
 // Hàm xử lý các overlay trong một scene
 const processSceneOverlays = async (scene, sceneIndex, ffmpeg) => {
   try {
-    const filters = [];
-    
-    if (!scene.overlays || !scene.overlays.length) {
-      return filters;
+    if (!scene.overlays || scene.overlays.length === 0) {
+      return {
+        filterComplex: '',
+        inputs: []
+      };
     }
     
-    for (let i = 0; i < scene.overlays.length; i++) {
-      const overlay = scene.overlays[i];
-      console.log(`Đang xử lý overlay ${i} cho scene ${sceneIndex}:`, overlay);
-      
-      let filter = null;      switch (overlay.type) {
-        case 'text':
-          // Lấy thông tin kích thước đầu ra từ cài đặt toàn cục của script hoặc giá trị mặc định
-          const resolution = scene.output?.resolution || '854x480';
-          const [width, height] = resolution.split('x').map(Number);
+    let allFilters = [];
+    let currentVideoStream = '[0:v]'; // Stream video gốc
+    let overlayIndex = 1;
+    let inputIndex = 1; // Index cho các input mới
+    let ffmpegInputs = []; // Mảng chứa các input cần thêm vào lệnh FFmpeg
+
+    // Xử lý text overlays trước
+    for (const overlay of scene.overlays) {
+      if (overlay.type === 'text' || overlay.type === 'text_overlay') {
+        let textFilter = '';
+        if (overlay.type === 'text') {
+          textFilter = await createTextOverlayFilter(overlay, overlayIndex);
+        } else {
+          textFilter = await createGlobalTextOverlayFilter(overlay, overlayIndex);
+        }
+        
+        if (textFilter) {
+          // Thay thế output label để tránh xung đột
+          textFilter = textFilter.replace(/\[v\d+\]$/, '[base]');
+          allFilters.push(textFilter);
+          currentVideoStream = '[base]';
+          overlayIndex++;
+        }
+      }
+    }
+
+    // Sau đó xử lý image overlays
+    for (const overlay of scene.overlays) {
+      if (overlay.type === 'image') {
+        try {
+          const imageResponse = await fetch(overlay.source);
+          if (!imageResponse.ok) {
+            throw new Error(`HTTP error! status: ${imageResponse.status}`);
+          }
+          const imageBlob = await imageResponse.blob();
+          const imageBuffer = await imageBlob.arrayBuffer();
+          const overlayPath = `overlay_${inputIndex}.png`;
+          await ffmpeg.writeFile(overlayPath, new Uint8Array(imageBuffer));
           
-          // Ước tính kích thước preview dựa trên thuộc tính scenePreviewDimensions nếu có
-          const previewDimensions = scene.scenePreviewDimensions || {
-            width: overlay.previewWidth || width,
-            height: overlay.previewHeight || height
-          };
-          
-          // Sử dụng hàm text overlay nâng cao với thêm thông tin kích thước và timing
-          filter = createAdvancedTextOverlay({
-            content: overlay.content,
-            position: overlay.position,
-            style: overlay.style,
-            animation: overlay.animation,
-            dimensions: {
-              preview: previewDimensions,
-              output: { width, height }
-            },
-            timing: overlay.timing // Pass timing information to the text overlay function
+          ffmpegInputs.push({
+            path: overlayPath,
+            index: inputIndex
           });
-          break;
-            case 'sticker':
-          // Chuyển đổi sticker sang image overlay để xử lý
-          filter = await createImageOverlay(ffmpeg, {
-            source: overlay.content,
-            position: overlay.position,
-            transform: overlay.transform,
-            effects: overlay.effects,
-            timing: overlay.timing // Pass timing information for stickers
-          }, i);
-          break;
           
-        case 'text_overlay':
-          filter = await createGlobalTextOverlayFilter(overlay, i);
-          break;
-          
-        case 'watermark':
-          filter = await createWatermarkFilter(overlay, i);
-          break;
-          
-        case 'image':
-          // Xử lý hình ảnh overlay
-          filter = await createImageOverlay(ffmpeg, overlay, i);
-          break;
-      }
-      
-      if (filter) {
-        filters.push(filter);
-      } else {
-        console.warn(`${overlay.type} overlay ${i} không được tạo (null filter)`);
+          const overlayFilter = await createImageOverlay(ffmpeg, overlay, inputIndex);
+          if (overlayFilter) {
+            // Điều chỉnh input stream index và output label
+            const adjustedFilter = overlayFilter
+              .replace(/\[\d+:v\]/, `[${inputIndex + 1}:v]`)
+              .replace(/\[v\d+\]$/, '[outv]');
+            allFilters.push(adjustedFilter);
+            inputIndex++;
+          }
+        } catch (error) {
+          console.error(`Lỗi khi xử lý image overlay:`, error);
+        }
       }
     }
+
+    // Kết hợp tất cả các filter
+    const finalFilterComplex = allFilters.join(';');
+    console.log('Final filter complex:', finalFilterComplex);
     
-    return filters;
+    return {
+      filterComplex: finalFilterComplex,
+      inputs: ffmpegInputs
+    };
   } catch (error) {
     console.error(`Lỗi khi xử lý overlays cho scene ${sceneIndex}:`, error);
-    return [];
+    return {
+      filterComplex: '',
+      inputs: []
+    };
   }
 };
 
 // Hàm tạo filter cho text overlay
-const createTextOverlayFilter = async (overlay, index) => {
-  try {
-    const { content, position, style } = overlay;
-    const { x, y } = position;
-    const { color, fontSize, fontFamily } = style;
+// const createTextOverlayFilter = async (overlay, index) => {
+//   try {
+//     const { content, position, style } = overlay;
+//     const { x, y } = position;
+//     const { color, fontSize, fontFamily } = style;
     
-    const escapedContent = content.replace(/'/g, "\\'");
-    const actualFontSize = fontSize || 24;
-    const hexColor = color?.replace('#', '') || 'FFFFFF';
+//     const escapedContent = content.replace(/'/g, "\\'");
+//     const actualFontSize = fontSize || 24;
+//     const hexColor = color?.replace('#', '') || 'FFFFFF';
     
-    const boxOpacity = 0.5;
-    const borderWidth = 5;
-    const shadowX = 2;
-    const shadowY = 2;
-    const shadowOpacity = 0.4;
+//     const boxOpacity = 0.5;
+//     const borderWidth = 5;
+//     const shadowX = 2;
+//     const shadowY = 2;
+//     const shadowOpacity = 0.4;
     
-    const textExpression = `drawtext=text='${escapedContent}'` +
-                          `:x=${x}:y=${y}` +
-                          `:fontsize=${actualFontSize}` +
-                          `:fontfile=arial.ttf` +
-                          `:fontcolor=0x${hexColor}` +
-                          `:box=1` +
-                          `:boxcolor=black@${boxOpacity}` +
-                          `:boxborderw=${borderWidth}` +
-                          `:shadowx=${shadowX}` +
-                          `:shadowy=${shadowY}` +
-                          `:shadowcolor=black@${shadowOpacity}`;
+//     let textExpression = `drawtext=text='${escapedContent}'`;
     
-    console.log(`[Text Overlay ${index}] Created filter with content: "${escapedContent}", position: (${x}, ${y}), size: ${actualFontSize}`);
-    return textExpression;
-  } catch (error) {
-    console.error(`[Text Overlay ${index}] Error creating filter:`, error);
-    return null;
-  }
-};
+//     // Thêm vị trí
+//     textExpression += `:x=${x}:y=${y}`;
+    
+//     // Thêm font và kích thước
+//     textExpression += `:fontsize=${actualFontSize}`;
+//     textExpression += `:fontfile=arial.ttf`;
+    
+//     // Thêm màu chữ
+//     textExpression += `:fontcolor=0x${hexColor}`;
+    
+//     // Thêm box và border
+//     textExpression += `:box=1`;
+//     textExpression += `:boxcolor=black@${boxOpacity}`;
+//     textExpression += `:boxborderw=${borderWidth}`;
+    
+//     // Thêm shadow
+//     textExpression += `:shadowx=${shadowX}`;
+//     textExpression += `:shadowy=${shadowY}`;
+//     textExpression += `:shadowcolor=black@${shadowOpacity}`;
+    
+//     // Xử lý animation nếu có
+//     if (overlay.animation) {
+//       const { type, duration, delay } = overlay.animation;
+      
+//       switch (type) {
+//         case 'fade':
+//           const fadeIn = overlay.animation.fadeIn || 1;
+//           const fadeOut = overlay.animation.fadeOut;
+          
+//           if (fadeIn > 0) {
+//             textExpression += `:enable='between(t,${delay},${delay + duration})'`;
+//             textExpression += `:alpha='if(lt(t,${delay}),0,if(lt(t,${delay + fadeIn}),(t-${delay})/${fadeIn},`;
+            
+//             if (fadeOut > 0 && duration > fadeOut) {
+//               const fadeOutStart = duration - fadeOut;
+//               textExpression += `if(lt(t,${delay + fadeOutStart}),1,(${delay + duration}-t)/${fadeOut})))'`;
+//             } else {
+//               textExpression += `1))'`;
+//             }
+//           }
+//           break;
+          
+//         case 'slide':
+//           const direction = overlay.animation.direction || 'left';
+//           const slideSpeed = overlay.animation.speed || 1;
+          
+//           if (direction === 'left') {
+//             textExpression += `:x='if(lt(t,${delay}),w,max(${x},w-(t-${delay})*${slideSpeed*100}))'`;
+//           } else if (direction === 'right') {
+//             textExpression += `:x='if(lt(t,${delay}),-w,min(${x},(t-${delay})*${slideSpeed*100}-w))'`;
+//           } else if (direction === 'top') {
+//             textExpression += `:y='if(lt(t,${delay}),-h,min(${y},(t-${delay})*${slideSpeed*100}-h))'`;
+//           } else if (direction === 'bottom') {
+//             textExpression += `:y='if(lt(t,${delay}),h,max(${y},h-(t-${delay})*${slideSpeed*100}))'`;
+//           }
+//           break;
+//       }
+//     }
+    
+//     console.log(`[Text Overlay ${index}] Created filter with content: "${escapedContent}", position: (${x}, ${y}), size: ${actualFontSize}`);
+//     return textExpression;
+//   } catch (error) {
+//     console.error(`[Text Overlay ${index}] Error creating filter:`, error);
+//     return null;
+//   }
+// };
 
 // Hàm tạo filter cho sticker overlay
 const createStickerOverlayFilter = async (overlay, index) => {
@@ -623,6 +627,9 @@ const createGlobalTextOverlayFilter = async (overlay, index) => {
     const actualFontSize = fontSize || 24;
     const hexColor = color?.replace('#', '') || 'FFFFFF';
     
+    // Đặt label cho output stream
+    const outLabel = `v${index}`;
+    
     let yPosition;
     switch (position) {
       case 'top':
@@ -637,14 +644,22 @@ const createGlobalTextOverlayFilter = async (overlay, index) => {
       default:
         yPosition = 'h*0.9-text_h';
     }
-      const textExpression = `drawtext=text='${escapedContent}'` +
-                          `:x=(w-text_w)/2:y=${yPosition}` +
-                          `:fontsize=${actualFontSize}` +
-                          `:fontfile=arial.ttf` +
-                          `:fontcolor=0x${hexColor}` +
-                          `:box=1` +
-                          `:boxcolor=black@0.5` +
-                          `:boxborderw=5`;
+      
+    // Bắt đầu với stream video input
+    let textExpression = `[0:v]`;
+    
+    // Thêm drawtext filter
+    textExpression += `drawtext=text='${escapedContent}'` +
+                    `:x=(w-text_w)/2:y=${yPosition}` +
+                    `:fontsize=${actualFontSize}` +
+                    `:fontfile=arial.ttf` +
+                    `:fontcolor=0x${hexColor}` +
+                    `:box=1` +
+                    `:boxcolor=black@0.5` +
+                    `:boxborderw=5`;
+    
+    // Thêm output label
+    textExpression += `[${outLabel}]`;
     
     console.log(`[Global Text Overlay ${index}] Created filter with content: "${escapedContent}", position: ${position}`);
     return textExpression;
@@ -662,6 +677,10 @@ const createWatermarkFilter = async (overlay, index) => {
     // Tạo file tạm cho watermark
     const watermarkPath = 'watermark.png';
     // TODO: Xử lý tạo watermark
+    
+    // Đặt label cho output stream
+    const outLabel = `v${index}`;
+    const watermarkLabel = `wm${index}`;
     
     let xPosition, yPosition;
     switch (position) {
@@ -686,10 +705,8 @@ const createWatermarkFilter = async (overlay, index) => {
         yPosition = 'H-h-10';
     }
     
-    const watermarkExpression = `movie=${watermarkPath}` +
-                              `,format=rgba,colorchannelmixer=aa=${opacity}` +
-                              `[watermark${index}];` +
-                              `[0:v][watermark${index}]overlay=${xPosition}:${yPosition}`;
+    const watermarkExpression = `movie=${watermarkPath},format=rgba,colorchannelmixer=aa=${opacity}[${watermarkLabel}];` +
+                              `[0:v][${watermarkLabel}]overlay=${xPosition}:${yPosition}[${outLabel}]`;
     
     console.log(`[Watermark ${index}] Created filter with position: ${position}, opacity: ${opacity}`);
     return watermarkExpression;
@@ -781,3 +798,4 @@ const base64ToBlob = async (base64String) => {
     throw new Error(`Lỗi khi xử lý base64 audio: ${error.message}`);
   }
 };
+

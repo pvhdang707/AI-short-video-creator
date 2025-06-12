@@ -209,6 +209,109 @@ export const generateScript = async (content, videoSettings, sceneElements, ffmp
       });
     }
 
+    // Thêm image overlays vào sceneConfig
+    if (elements.imageOverlays?.length > 0) {
+      elements.imageOverlays.forEach((overlay, index) => {
+        // Lấy kích thước thực tế của video
+        const [outputWidth, outputHeight] = videoSettings.resolution.split('x').map(Number);
+        // Kích thước preview
+        const previewWidth = elements.scenePreviewDimensions?.width || outputWidth;
+        const previewHeight = elements.scenePreviewDimensions?.height || outputHeight;
+        
+        // Tính toán tỷ lệ kích thước giữa preview và output
+        const widthRatio = outputWidth / previewWidth;
+        const heightRatio = outputHeight / previewHeight;
+        
+        // Tính toán kích thước thực tế của overlay trong video output
+        const originalWidth = overlay.originalDimensions.width;
+        const originalHeight = overlay.originalDimensions.height;
+        
+        // Tính toán kích thước mới dựa trên tỷ lệ với preview
+        const previewOverlayWidth = originalWidth * (previewWidth / outputWidth);
+        const previewOverlayHeight = originalHeight * (previewHeight / outputHeight);
+        
+        // Tính toán scale factor để giữ nguyên tỷ lệ kích thước
+        const scaleFactor = Math.min(
+          previewWidth / previewOverlayWidth,
+          previewHeight / previewOverlayHeight
+        ) * overlay.scale;
+        
+        // Tính toán vị trí tuyệt đối trong video output
+        const absoluteX = Math.round(overlay.position.x * outputWidth / 100);
+        const absoluteY = Math.round(overlay.position.y * outputHeight / 100);
+        
+        sceneConfig.overlays.push({
+          type: "image",
+          source: overlay.source,
+          position: {
+            x: overlay.position.x,
+            y: overlay.position.y,
+            absoluteX,
+            absoluteY,
+            unit: 'percentage',
+            previewDimensions: {
+              width: previewWidth,
+              height: previewHeight
+            }
+          },
+          dimensions: {
+            original: {
+              width: originalWidth,
+              height: originalHeight
+            },
+            preview: {
+              width: previewOverlayWidth,
+              height: previewOverlayHeight
+            },
+            output: {
+              width: originalWidth * scaleFactor,
+              height: originalHeight * scaleFactor
+            }
+          },
+          transform: {
+            scale: scaleFactor,
+            rotation: overlay.rotation,
+            opacity: overlay.opacity
+          },
+          timing: {
+            start: overlay.timing.start,
+            end: overlay.timing.end
+          },
+          // Thêm thông tin để tạo lệnh FFmpeg với filter_complex
+          // ffmpeg: {
+          //   // Input files
+          //   inputs: [
+          //     { file: 'scene_0_image.jpg', options: ['-loop', '1'] },
+          //     { file: 'scene_0_audio_temp.mp3', options: ['-t', '11.276'] },
+          //     { file: `overlay_${index}.png` }
+          //   ],
+          //   // Filter complex chain - sửa lại cú pháp để kết nối các stream đúng cách
+          //   filterComplex: [
+          //     // Load overlay image và scale nó
+          //     `movie=${overlay.source}[in${index}];[in${index}]scale=iw*${scaleFactor}:ih*${scaleFactor}[scaled${index}]`,
+          //     // Overlay lên video chính
+          //     `[0:v][scaled${index}]overlay=${absoluteX}:${absoluteY}[v${index}]`
+          //   ].join(';'),
+          //   // Output mapping
+          //   outputMapping: [
+          //     `-map "[v${index}]"`,  // Map video output từ filter_complex
+          //     '-map 1:a'            // Map audio từ input thứ 2
+          //   ],
+          //   // Encoding settings
+          //   encoding: {
+          //     videoCodec: 'libx264',
+          //     preset: 'medium',
+          //     crf: '23',
+          //     fps: '24',
+          //     resolution: '854x480',
+          //     pixelFormat: 'yuv420p',
+          //     shortest: true
+          //   }
+          // }
+        });
+      });
+    }
+
     // Thêm transition nếu không phải scene cuối
     if (index < content.length - 1 && videoSettings.transition !== 'none') {
       sceneConfig.transition = {

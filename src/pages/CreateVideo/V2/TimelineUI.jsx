@@ -67,6 +67,17 @@ const TimelineUI = React.forwardRef(({ content = [], onExportScript, ffmpeg }, r
     startTime: 0,
     endTime: 5
   });
+  const [showImageModal, setShowImageModal] = useState(false);
+  const [imageOverlaySettings, setImageOverlaySettings] = useState({
+    startTime: 0,
+    endTime: 5,
+    scale: 1,
+    rotation: 0,
+    opacity: 1
+  });
+  const [selectedImage, setSelectedImage] = useState(null);
+  const [editingImageOverlay, setEditingImageOverlay] = useState(null);
+  const [showImageOverlayControls, setShowImageOverlayControls] = useState(false);
 
   // Danh sách sticker đơn giản
   const availableStickers = [
@@ -305,15 +316,42 @@ const TimelineUI = React.forwardRef(({ content = [], onExportScript, ffmpeg }, r
         }));
       }
 
+      // Xử lý cho image overlay
+      if (type === 'imageOverlay') {
+        const currentElement = elements.imageOverlays.find(el => el.id === parseInt(id));
+        if (!currentElement) return;
+
+        const overlayPercentX = Math.max(0, Math.min(100, 
+          currentElement.position.x + (delta.x / previewRect.width) * 100
+        ));
+        const overlayPercentY = Math.max(0, Math.min(100, 
+          currentElement.position.y + (delta.y / previewRect.height) * 100
+        ));
+
+        setSceneElements(prev => ({
+          ...prev,
+          [selectedScene]: {
+            ...prev[selectedScene],
+            imageOverlays: prev[selectedScene].imageOverlays.map(el => 
+              el.id === parseInt(id)
+                ? { ...el, position: { x: overlayPercentX, y: overlayPercentY } }
+                : el
+            )
+          }
+        }));
+        return;
+      }
+
+      // Xử lý cho các element khác (stickers, labels)
       const currentElement = elements[type === 'sticker' ? 'stickers' : 'labels']
         .find(el => el.id === parseInt(id));
 
       if (!currentElement) return;
 
-      const percentX = Math.max(0, Math.min(100, 
+      const elementPercentX = Math.max(0, Math.min(100, 
         currentElement.position.x + (delta.x / previewRect.width) * 100
       ));
-      const percentY = Math.max(0, Math.min(100, 
+      const elementPercentY = Math.max(0, Math.min(100, 
         currentElement.position.y + (delta.y / previewRect.height) * 100
       ));
 
@@ -323,7 +361,7 @@ const TimelineUI = React.forwardRef(({ content = [], onExportScript, ffmpeg }, r
           ...prev[selectedScene],
           [type === 'sticker' ? 'stickers' : 'labels']: prev[selectedScene][type === 'sticker' ? 'stickers' : 'labels']
             .map(el => el.id === parseInt(id)
-              ? { ...el, position: { x: percentX, y: percentY } }
+              ? { ...el, position: { x: elementPercentX, y: elementPercentY } }
               : el
             )
         }
@@ -381,6 +419,59 @@ const TimelineUI = React.forwardRef(({ content = [], onExportScript, ffmpeg }, r
                     style={label.style}
                   >
                     {label.text}
+                  </DraggableElement>
+                ))}
+                {elements.imageOverlays?.map(overlay => (
+                  <DraggableElement
+                    key={overlay.id}
+                    id={overlay.id}
+                    type="imageOverlay"
+                    position={overlay.position}
+                    style={{
+                      transform: `scale(${overlay.scale}) rotate(${overlay.rotation}deg)`,
+                      opacity: overlay.opacity,
+                      width: `${overlay.displayDimensions.width}px`,
+                      height: `${overlay.displayDimensions.height}px`,
+                      position: 'absolute',
+                      cursor: 'move'
+                    }}
+                  >
+                    <div 
+                      className="relative group w-full h-full"
+                      onClick={() => handleImageOverlayClick(overlay)}
+                    >
+                      <img
+                        src={overlay.source}
+                        alt="Overlay"
+                        style={{
+                          width: '100%',
+                          height: '100%',
+                          objectFit: 'contain',
+                          pointerEvents: 'none',
+                          transform: `scale(${overlay.scale}) rotate(${overlay.rotation}deg)`,
+                          opacity: overlay.opacity
+                        }}
+                      />
+                      <div className="absolute -top-2 -right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSceneElements(prev => ({
+                              ...prev,
+                              [selectedScene]: {
+                                ...prev[selectedScene],
+                                imageOverlays: prev[selectedScene].imageOverlays.filter(el => el.id !== overlay.id)
+                              }
+                            }));
+                          }}
+                          className="bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
                   </DraggableElement>
                 ))}
               </>
@@ -633,6 +724,14 @@ const TimelineUI = React.forwardRef(({ content = [], onExportScript, ffmpeg }, r
             onEnded={() => setIsPlaying(false)}
           />
         )}
+
+        {/* Image Overlay */}
+        <button
+          onClick={() => setShowImageModal(true)}
+          className="p-4 bg-gray-800/50 text-white rounded-lg hover:bg-gray-700"
+        >
+          🖼️ Thêm Ảnh Overlay
+        </button>
       </div>
     );
   };
@@ -665,6 +764,26 @@ const generateAndExportScript = async () => {
       if (onExportScript) {
         onExportScript(script);
       }
+
+      // Tạo file JSON và tải xuống
+      const scriptJson = JSON.stringify(script, null, 2); // Thêm indent để dễ đọc
+      const scriptBlob = new Blob([scriptJson], { type: 'application/json' });
+      const scriptUrl = URL.createObjectURL(scriptBlob);
+      
+      // Tạo tên file với timestamp
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const fileName = `ffmpeg-script-${timestamp}.json`;
+      
+      // Tạo link tải xuống
+      const downloadLink = document.createElement('a');
+      downloadLink.href = scriptUrl;
+      downloadLink.download = fileName;
+      document.body.appendChild(downloadLink);
+      downloadLink.click();
+      
+      // Dọn dẹp
+      document.body.removeChild(downloadLink);
+      URL.revokeObjectURL(scriptUrl);
       
       return script;
     } catch (error) {
@@ -765,6 +884,139 @@ const generateAndExportScript = async () => {
     setShowStickerModal(false);
   };
 
+  // Thêm hàm xử lý upload ảnh
+  const handleImageUpload = (event) => {
+    const file = event.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          setSelectedImage({
+            file: file,
+            url: e.target.result,
+            width: img.width,
+            height: img.height
+          });
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  // Thêm hàm tính toán tỷ lệ scale
+  const calculateOverlayScale = (overlayImage, scenePreview) => {
+    // Lấy kích thước preview của scene
+    const previewWidth = scenePreview?.width || parseInt(videoSettings.resolution.split('x')[0]);
+    const previewHeight = scenePreview?.height || parseInt(videoSettings.resolution.split('x')[1]);
+
+    // Tính tỷ lệ scale của scene preview so với kích thước thực
+    const sceneScaleRatio = Math.min(
+      previewWidth / parseInt(videoSettings.resolution.split('x')[0]),
+      previewHeight / parseInt(videoSettings.resolution.split('x')[1])
+    );
+
+    // Tính toán kích thước mới cho overlay dựa trên cạnh dài nhất
+    const maxDimension = 100; // Kích thước tối đa cho cạnh dài nhất
+    const isWidthLonger = overlayImage.width > overlayImage.height;
+    
+    let newWidth, newHeight;
+    if (isWidthLonger) {
+      newWidth = maxDimension;
+      newHeight = (overlayImage.height / overlayImage.width) * maxDimension;
+    } else {
+      newHeight = maxDimension;
+      newWidth = (overlayImage.width / overlayImage.height) * maxDimension;
+    }
+
+    // Tính toán scale factor để chuyển đổi từ kích thước gốc sang kích thước hiển thị
+    const displayScale = Math.min(
+      newWidth / overlayImage.width,
+      newHeight / overlayImage.height
+    );
+
+    // Tính toán scale factor cuối cùng cho FFmpeg
+    const finalScale = displayScale / sceneScaleRatio;
+
+    return {
+      displayScale,
+      finalScale,
+      displayDimensions: {
+        width: newWidth,
+        height: newHeight
+      }
+    };
+  };
+
+  // Cập nhật hàm handleAddImageOverlay
+  const handleAddImageOverlay = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!selectedImage) return;
+    
+    // Get the current scene's duration
+    const scene = content.find(s => s.scene_number === selectedScene);
+    const sceneDuration = scene?.duration || 5;
+    
+    // Ensure the end time doesn't exceed scene duration
+    const endTime = Math.min(imageOverlaySettings.endTime, sceneDuration);
+
+    // Lấy kích thước preview của scene
+    let scenePreview;
+    if (previewRef.current) {
+      const previewRect = previewRef.current.getBoundingClientRect();
+      scenePreview = {
+        width: previewRect.width,
+        height: previewRect.height
+      };
+    } else {
+      // Nếu previewRef chưa sẵn sàng, sử dụng kích thước từ videoSettings
+      const [outputWidth, outputHeight] = videoSettings.resolution.split('x').map(Number);
+      scenePreview = {
+        width: outputWidth,
+        height: outputHeight
+      };
+    }
+
+    // Tính toán tỷ lệ scale
+    const scaleInfo = calculateOverlayScale(selectedImage, scenePreview);
+    
+    const newImageOverlay = {
+      id: Date.now(),
+      type: 'image',
+      source: selectedImage.url,
+      originalDimensions: {
+        width: selectedImage.width,
+        height: selectedImage.height
+      },
+      displayDimensions: scaleInfo.displayDimensions,
+      position: { x: 50, y: 50 }, // Vị trí mặc định ở giữa
+      scale: imageOverlaySettings.scale,
+      rotation: imageOverlaySettings.rotation,
+      opacity: imageOverlaySettings.opacity,
+      scaleInfo: {
+        displayScale: scaleInfo.displayScale,
+        finalScale: scaleInfo.finalScale
+      },
+      timing: {
+        start: imageOverlaySettings.startTime,
+        end: endTime
+      }
+    };
+    
+    setSceneElements(prev => ({
+      ...prev,
+      [selectedScene]: {
+        ...prev[selectedScene],
+        imageOverlays: [...(prev[selectedScene].imageOverlays || []), newImageOverlay]
+      }
+    }));
+    
+    setSelectedImage(null);
+    setShowImageModal(false);
+  };
+
   // Đưa phương thức generateAndExportScript ra bên ngoài để VideoGenerator có thể gọi
   React.useImperativeHandle(ref, () => ({
     generateAndExportScript
@@ -786,6 +1038,28 @@ const generateAndExportScript = async () => {
       }
     };
   }, [generateAndExportScript]); // Thêm dependency để đảm bảo luôn sử dụng phiên bản mới nhất của hàm
+
+  // Thêm hàm xử lý click vào image overlay
+  const handleImageOverlayClick = (overlay) => {
+    setEditingImageOverlay(overlay);
+    setShowImageOverlayControls(true);
+  };
+
+  // Thêm hàm cập nhật image overlay
+  const handleUpdateImageOverlay = (updates) => {
+    setSceneElements(prev => ({
+      ...prev,
+      [selectedScene]: {
+        ...prev[selectedScene],
+        imageOverlays: prev[selectedScene].imageOverlays.map(el =>
+          el.id === editingImageOverlay.id
+            ? { ...el, ...updates }
+            : el
+        )
+      }
+    }));
+    setEditingImageOverlay(prev => ({ ...prev, ...updates }));
+  };
 
   return (
     <div className="bg-gray-800/50 p-6 rounded-lg space-y-4 timeline-component">
@@ -1212,16 +1486,16 @@ const generateAndExportScript = async () => {
           </div>
         </div>
       </div>
-      {/* Comment out the export button as it's no longer needed
-      <div className="flex justify-end mb-4">
+      {/* Export button */}
+      {/* <div className="flex justify-end mb-4">
         <button
-          onClick={exportFFmpegScript}
+          onClick={generateAndExportScript}
           className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
         >
           Xuất Script FFmpeg
         </button>
-      </div>
-      */}
+      </div> */}
+     
       <div className="grid grid-cols-2 gap-8">
         {/* Scene List */}
         <div className="space-y-4">
@@ -1428,6 +1702,256 @@ const generateAndExportScript = async () => {
                   setShowTextModal(false);
                   setEditingTextId(null);
                   setTextInput('');
+                }}
+                className="flex-1 p-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600"
+              >
+                Đóng
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Image Modal */}
+      {showImageModal && (
+        <div 
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+        
+        >
+          <div 
+            className="bg-gray-800 p-6 rounded-lg w-96"
+            
+          >
+            <h3 className="text-white text-lg font-medium mb-4">Thêm Ảnh Overlay</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm text-gray-400 mb-2">Chọn ảnh</label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageUpload}
+                  className="w-full bg-gray-700 text-white rounded p-2"
+                />
+              </div>
+              
+              {selectedImage && (
+                <>
+                  <div>
+                    <label className="block text-sm text-gray-400 mb-2">Scale</label>
+                    <input
+                      type="range"
+                      min="0.1"
+                      max="2"
+                      step="0.1"
+                      value={imageOverlaySettings.scale}
+                      onChange={(e) => setImageOverlaySettings(prev => ({
+                        ...prev,
+                        scale: parseFloat(e.target.value)
+                      }))}
+                      className="w-full"
+                    />
+                    <span className="text-white">{imageOverlaySettings.scale}</span>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm text-gray-400 mb-2">Rotation</label>
+                    <input
+                      type="range"
+                      min="-180"
+                      max="180"
+                      value={imageOverlaySettings.rotation}
+                      onChange={(e) => setImageOverlaySettings(prev => ({
+                        ...prev,
+                        rotation: parseInt(e.target.value)
+                      }))}
+                      className="w-full"
+                    />
+                    <span className="text-white">{imageOverlaySettings.rotation}°</span>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm text-gray-400 mb-2">Opacity</label>
+                    <input
+                      type="range"
+                      min="0"
+                      max="1"
+                      step="0.1"
+                      value={imageOverlaySettings.opacity}
+                      onChange={(e) => setImageOverlaySettings(prev => ({
+                        ...prev,
+                        opacity: parseFloat(e.target.value)
+                      }))}
+                      className="w-full"
+                    />
+                    <span className="text-white">{imageOverlaySettings.opacity}</span>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm text-gray-400 mb-2">Thời gian bắt đầu (s)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        max={audioRefs.current[`voice_${selectedScene}`]?.duration || 5}
+                        step="0.1"
+                        value={imageOverlaySettings.startTime}
+                        onChange={(e) => setImageOverlaySettings(prev => ({
+                          ...prev,
+                          startTime: parseFloat(e.target.value)
+                        }))}
+                        className="w-full bg-gray-700 text-white rounded p-2"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm text-gray-400 mb-2">Thời gian kết thúc (s)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        max={audioRefs.current[`voice_${selectedScene}`]?.duration || 5}
+                        step="0.1"
+                        value={imageOverlaySettings.endTime}
+                        onChange={(e) => setImageOverlaySettings(prev => ({
+                          ...prev,
+                          endTime: parseFloat(e.target.value)
+                        }))}
+                        className="w-full bg-gray-700 text-white rounded p-2"
+                      />
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+            <div className="flex space-x-2 mt-4">
+              <button
+                onClick={handleAddImageOverlay}
+                disabled={!selectedImage}
+                className="flex-1 p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+              >
+                Thêm
+              </button>
+              <button
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setShowImageModal(false);
+                  setSelectedImage(null);
+                }}
+                className="flex-1 p-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600"
+              >
+                Đóng
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Image Overlay Controls Modal */}
+      {showImageOverlayControls && editingImageOverlay && (
+        <div 
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+          }}
+        >
+          <div 
+            className="bg-gray-800 p-6 rounded-lg w-96"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+            }}
+          >
+            <h3 className="text-white text-lg font-medium mb-4">Chỉnh sửa Image Overlay</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm text-gray-400 mb-2">Scale</label>
+                <input
+                  type="range"
+                  min="0.1"
+                  max="2"
+                  step="0.1"
+                  value={editingImageOverlay.scale}
+                  onChange={(e) => handleUpdateImageOverlay({
+                    scale: parseFloat(e.target.value)
+                  })}
+                  className="w-full"
+                />
+                <span className="text-white">{editingImageOverlay.scale}</span>
+              </div>
+              
+              <div>
+                <label className="block text-sm text-gray-400 mb-2">Rotation</label>
+                <input
+                  type="range"
+                  min="-180"
+                  max="180"
+                  value={editingImageOverlay.rotation}
+                  onChange={(e) => handleUpdateImageOverlay({
+                    rotation: parseInt(e.target.value)
+                  })}
+                  className="w-full"
+                />
+                <span className="text-white">{editingImageOverlay.rotation}°</span>
+              </div>
+              
+              <div>
+                <label className="block text-sm text-gray-400 mb-2">Opacity</label>
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.1"
+                  value={editingImageOverlay.opacity}
+                  onChange={(e) => handleUpdateImageOverlay({
+                    opacity: parseFloat(e.target.value)
+                  })}
+                  className="w-full"
+                />
+                <span className="text-white">{editingImageOverlay.opacity}</span>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm text-gray-400 mb-2">Thời gian bắt đầu (s)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max={audioRefs.current[`voice_${selectedScene}`]?.duration || 5}
+                    step="0.1"
+                    value={editingImageOverlay.timing.start}
+                    onChange={(e) => handleUpdateImageOverlay({
+                      timing: {
+                        ...editingImageOverlay.timing,
+                        start: parseFloat(e.target.value)
+                      }
+                    })}
+                    className="w-full bg-gray-700 text-white rounded p-2"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm text-gray-400 mb-2">Thời gian kết thúc (s)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max={audioRefs.current[`voice_${selectedScene}`]?.duration || 5}
+                    step="0.1"
+                    value={editingImageOverlay.timing.end}
+                    onChange={(e) => handleUpdateImageOverlay({
+                      timing: {
+                        ...editingImageOverlay.timing,
+                        end: parseFloat(e.target.value)
+                      }
+                    })}
+                    className="w-full bg-gray-700 text-white rounded p-2"
+                  />
+                </div>
+              </div>
+            </div>
+            <div className="flex space-x-2 mt-4">
+              <button
+                onClick={() => {
+                  setShowImageOverlayControls(false);
+                  setEditingImageOverlay(null);
                 }}
                 className="flex-1 p-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600"
               >
