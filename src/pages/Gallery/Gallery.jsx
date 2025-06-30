@@ -139,7 +139,11 @@ const Dashboard = () => {
 
   // Lấy ảnh cho project
   const getProjectImage = (script) => {
-    // Tìm ảnh đầu tiên từ các scene
+    // Ưu tiên cover_image nếu có
+    if (script.cover_image) {
+      return script.cover_image;
+    }
+    // Nếu không có thì lấy ảnh đầu tiên của scene
     if (script.scenes && script.scenes.length > 0) {
       for (const scene of script.scenes) {
         if (scene.images && scene.images.length > 0) {
@@ -147,7 +151,6 @@ const Dashboard = () => {
         }
       }
     }
-    
     // Nếu không có ảnh, trả về ảnh mặc định
     return '/images/1.jpeg';
   };
@@ -330,12 +333,7 @@ const Dashboard = () => {
                           {script.description || 'No description available for this project.'}
                         </p>
                         <div className="flex justify-between items-center">
-                          <div className="flex items-center space-x-2 text-sm text-gray-500">
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                            <span>{script.total_duration ? `${Math.floor(script.total_duration / 60)}:${(script.total_duration % 60).toString().padStart(2, '0')}` : 'N/A'}</span>
-                          </div>
+                          
                           <div className="flex items-center space-x-2 text-sm text-gray-500">
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />

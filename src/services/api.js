@@ -200,6 +200,7 @@ export const videoScriptAPI = {
   getScripts: (params) => api.get('/video-scripts/scripts', { params }),
   getScriptById: (id) => api.get(`/video-scripts/scripts/${id}`),
   saveScript: (scriptId) => api.post(`/video-scripts/scripts/${scriptId}/save`),
+  uploadImagesFromUrls: (scriptId) => api.post(`/video-scripts/scripts/${scriptId}/upload-images-from-urls`),
   deleteScript: (scriptId) => api.delete(`/video-scripts/scripts/${scriptId}`),
   updateScript: (scriptId, data) => api.put(`/video-scripts/scripts/${scriptId}`, data),
 };

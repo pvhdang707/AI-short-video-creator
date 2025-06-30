@@ -433,6 +433,29 @@ const ContentGenerator = ({ script, onNext, onBack, initialContent }) => {
 
   const handleNext = async () => {
     try {
+      // Kiểm tra xem tất cả scene đã có đủ content chưa
+      const isComplete = scenes.every((scene, index) => {
+        const hasVoice = generatedVoices[index + 1] || scene.voiceSettings.option === 'upload';
+        const hasImage = generatedImages[index + 1];
+        return hasVoice && hasImage;
+      });
+      
+      if (!isComplete) {
+        showError('Please ensure all scenes have complete voice and image content');
+        return;
+      }
+
+      // Gọi API uploadImagesFromUrls để upload ảnh từ Replicate lên cloud storage
+      try {
+        const uploadResponse = await videoScriptAPI.uploadImagesFromUrls(script.id);
+        console.log('Images uploaded successfully:', uploadResponse.data);
+        showSuccess('Images uploaded to cloud storage successfully!');
+      } catch (uploadError) {
+        console.error('Error uploading images:', uploadError);
+        showError('Failed to upload images to cloud storage. Please try again.');
+        return;
+      }
+
       const processedScenes = await Promise.all(scenes.map(async (scene, index) => {
         const voiceData = generatedVoices[index + 1];
         const imageData = generatedImages[index + 1];
@@ -482,15 +505,6 @@ const ContentGenerator = ({ script, onNext, onBack, initialContent }) => {
       
       // Kiểm tra nếu có scene nào bị lỗi
       if (processedScenes.some(scene => scene === null)) {
-        showError('Please ensure all scenes have complete voice and image content');
-        return;
-      }
-      
-      const isComplete = processedScenes.every(scene => 
-        scene.voice && scene.image && scene.voice_over && scene.visual_elements
-      );
-      
-      if (!isComplete) {
         showError('Please ensure all scenes have complete voice and image content');
         return;
       }

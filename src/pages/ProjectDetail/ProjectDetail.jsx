@@ -206,6 +206,9 @@ const ProjectDetail = () => {
   };
 
   const getProjectImage = (script) => {
+    if (script.cover_image) {
+      return script.cover_image;
+    }
     if (script.scenes && script.scenes.length > 0) {
       for (const scene of script.scenes) {
         if (scene.images && scene.images.length > 0) {
