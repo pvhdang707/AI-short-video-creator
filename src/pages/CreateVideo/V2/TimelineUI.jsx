@@ -9,11 +9,16 @@ import {
 } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
 import { generateScript } from '../../../utils/scriptGenerator';
+import ZIndexManager from '../../../components/ZIndexFix.jsx';
 
 
 
 
-const TimelineUI = React.forwardRef(({ content = [], onExportScript, ffmpeg }, ref) => {
+const TimelineUI = React.forwardRef(({ content = [], onExportScript, ffmpeg, scriptId }, ref) => {
+  // Debug log để kiểm tra scriptId
+  console.log('TimelineUI received scriptId:', scriptId);
+  console.log('TimelineUI received content:', content);
+
   // Add a function to generate script that can be called from a button click in VideoGenerator
   const generateScriptForVideo = async () => {
     if (!videoSettings) {
@@ -23,7 +28,7 @@ const TimelineUI = React.forwardRef(({ content = [], onExportScript, ffmpeg }, r
 
     // Kiểm tra xem content và sceneElements có hợp lệ không
     if (!content || content.length === 0) {
-      console.error('Không có nội dung để tạo script');
+      console.error('No content available to create script');
       return null;
     }
 
@@ -33,9 +38,44 @@ const TimelineUI = React.forwardRef(({ content = [], onExportScript, ffmpeg }, r
     }
 
     try {
-      console.log('Đang tạo script với FFmpeg:', !!ffmpeg);
+      console.log('=== SCRIPT GENERATION DEBUG ===');
+      console.log('Creating script with FFmpeg:', !!ffmpeg);
+      console.log('VideoSettings:', videoSettings);
+      console.log('IndividualTransitions:', videoSettings.individualTransitions);
+      console.log('IndividualTransitions length:', videoSettings.individualTransitions?.length);
+      console.log('Content length:', content?.length);
+      
+      // Log chi tiết từng individual transition
+      if (videoSettings.individualTransitions) {
+        console.log('=== INDIVIDUAL TRANSITIONS DETAIL ===');
+        videoSettings.individualTransitions.forEach((transition, index) => {
+          console.log(`Transition ${index}:`, {
+            id: transition.id,
+            fromScene: transition.fromScene,
+            toScene: transition.toScene,
+            type: transition.type,
+            duration: transition.duration,
+            isActive: transition.type !== 'none'
+          });
+        });
+      }
+      
       // Truyền ffmpeg vào hàm generateScript nếu có
       const script = await generateScript(content, videoSettings, sceneElements, ffmpeg);
+      
+      console.log('=== GENERATED SCRIPT DEBUG ===');
+      console.log('Script global transitions:', script.global?.transitions);
+      console.log('Script individual transitions:', script.global?.transitions?.individualTransitions);
+      console.log('Script scenes count:', script.scenes?.length);
+      
+      // Cập nhật scriptId nếu có
+      if (scriptId) {
+        script.id = scriptId;
+        console.log('Updated script ID:', scriptId);
+        console.log('Script after updating ID:', script);
+      } else {
+        console.log('No scriptId to update');
+      }
       
       // Gọi callback để đưa script về parent
       if (onExportScript) {
@@ -44,7 +84,7 @@ const TimelineUI = React.forwardRef(({ content = [], onExportScript, ffmpeg }, r
       
       return script;
     } catch (error) {
-      console.error('Lỗi khi tạo script:', error);
+      console.error('Error creating script:', error);
       return null;
     }
   };
@@ -79,19 +119,7 @@ const TimelineUI = React.forwardRef(({ content = [], onExportScript, ffmpeg }, r
   const [editingImageOverlay, setEditingImageOverlay] = useState(null);
   const [showImageOverlayControls, setShowImageOverlayControls] = useState(false);
 
-  // Danh sách sticker đơn giản
-  const availableStickers = [
-    { type: 'emoji', content: '😊', name: 'Smile' },
-    { type: 'emoji', content: '❤️', name: 'Heart' },
-    { type: 'emoji', content: '👍', name: 'Thumbs Up' },
-    { type: 'emoji', content: '🎉', name: 'Party' },
-    { type: 'emoji', content: '⭐', name: 'Star' },
-    { type: 'emoji', content: '🔥', name: 'Fire' },
-    { type: 'emoji', content: '💯', name: '100' },
-    { type: 'emoji', content: '👏', name: 'Clap' },
-    { type: 'emoji', content: '🙌', name: 'Raise Hands' },
-    { type: 'emoji', content: '✨', name: 'Sparkles' }
-  ];
+ 
 
   // Thêm state cho các tùy chỉnh video
   const [videoSettings, setVideoSettings] = useState({
@@ -99,8 +127,8 @@ const TimelineUI = React.forwardRef(({ content = [], onExportScript, ffmpeg }, r
     fps: 24,
     preset: 'medium',
     crf: 23,
-    fadeIn: 0.5,
-    fadeOut: 0.5,
+    fadeIn: 0,
+    fadeOut: 0,
     zoomEffect: false,
     brightness: 0,
     contrast: 1,
@@ -114,9 +142,35 @@ const TimelineUI = React.forwardRef(({ content = [], onExportScript, ffmpeg }, r
     textPosition: 'bottom',
     textColor: 'white',
     textSize: 24,
+    textBackground: false,
+    textBackgroundColor: '#000000',
+    textBackgroundOpacity: 0.5,
+    textOutline: false,
+    textOutlineColor: '#000000',
+    textOutlineWidth: 2,
+    textShadow: false,
+    textShadowColor: '#000000',
+    textShadowX: 2,
+    textShadowY: 2,
+    textShadowOpacity: 0.4,
     watermark: false,
     watermarkPosition: 'bottom-right',
-    watermarkOpacity: 0.5
+    watermarkOpacity: 0.5,
+    audioEffects: {
+      volume: 1,
+      fadeIn: 0,
+      fadeOut: 0,
+      normalize: false,
+      bass: 0,
+      treble: 0
+    },
+    // Thêm cấu hình transition riêng lẻ cho từng scene
+    individualTransitions: [],
+    showAdvanced: false,
+    activeTab: 'effects',
+    // Thêm state cho các menu dropdown mới
+    showEffects: false,
+    showColor: false
   });
 
   // Khởi tạo scene elements
@@ -126,6 +180,7 @@ const TimelineUI = React.forwardRef(({ content = [], onExportScript, ffmpeg }, r
       initialElements[scene.scene_number] = {
         stickers: [],
         labels: [],
+        imageOverlays: [], // Thêm imageOverlays
         effects: [],
         transitions: {
           type: 'none',
@@ -143,53 +198,146 @@ const TimelineUI = React.forwardRef(({ content = [], onExportScript, ffmpeg }, r
           brightness: 0,
           contrast: 1,
           saturation: 1
-        }
+        },
+        activeTab: 'audio' // Thêm activeTab mặc định
       };
     });
     setSceneElements(initialElements);
   }, [content]);
 
+  // Cập nhật individualTransitions khi content thay đổi
+  useEffect(() => {
+    if (content && content.length > 1) {
+      const transitions = [];
+      for (let i = 0; i < content.length - 1; i++) {
+        transitions.push({
+          id: i,
+          fromScene: content[i].scene_number,
+          toScene: content[i + 1].scene_number,
+          type: 'none',
+          duration: 1
+        });
+      }
+      console.log('Initializing individualTransitions:', transitions);
+      setVideoSettings(prev => ({
+        ...prev,
+        individualTransitions: transitions
+      }));
+    } else if (content && content.length <= 1) {
+      // Reset individualTransitions nếu chỉ có 1 scene hoặc không có scene
+      setVideoSettings(prev => ({
+        ...prev,
+        individualTransitions: []
+      }));
+    }
+  }, [content]);
+
   // Scene List Component
-  const SceneList = () => (
-    <div className="space-y-4">
+  const SceneList = () => {
+    const updateTransition = (index, updates) => {
+      setVideoSettings(prev => ({
+        ...prev,
+        individualTransitions: prev.individualTransitions.map((transition, i) =>
+          i === index ? { ...transition, ...updates } : transition
+        )
+      }));
+    };
+
+    return (
+    <div className="space-y-2">
       {content.map((scene, index) => (
+          <div key={index}>
         <div 
-          key={index} 
-          className={`bg-gray-900/50 p-4 rounded-lg cursor-pointer transition-colors ${
-            selectedScene === scene.scene_number ? 'ring-2 ring-blue-500' : ''
+          className={`bg-gray-900/50 p-3 rounded-lg cursor-pointer transition-all duration-200 border ${
+            selectedScene === scene.scene_number 
+              ? 'ring-2 ring-blue-500 border-blue-400 bg-blue-900/20' 
+              : 'border-gray-600 hover:border-gray-500 hover:bg-gray-800/50'
           }`}
           onClick={() => setSelectedScene(scene.scene_number)}
         >
-          <div className="flex items-start space-x-4">
-            {/* Scene Number */}
-            <div className="w-16 flex-shrink-0">
-              <span className="text-white font-medium">Scene {scene.scene_number}</span>
+          <div className="flex items-start space-x-3">
+            {/* Scene Number Badge */}
+            <div className="flex-shrink-0">
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${
+                selectedScene === scene.scene_number 
+                  ? 'bg-blue-600 text-white' 
+                  : 'bg-gray-700 text-gray-300'
+              }`}>
+                {scene.scene_number}
+              </div>
             </div>
 
-            {/* Scene Preview */}
-            <div className="flex-1">
-              <div className="relative h-32 w-full bg-gray-800 rounded-lg overflow-hidden flex items-center justify-center">
-                {scene.image && scene.image.url && (
+            {/* Scene Content */}
+            <div className="flex-1 min-w-0">
+              {/* Scene Preview */}
+              <div className="relative h-20 w-full bg-gray-800 rounded-lg overflow-hidden flex items-center justify-center mb-2">
+                {scene.image && scene.image.url ? (
                   <img
                     src={scene.image.url}
                     alt={`Scene ${scene.scene_number}`}
-                    className="w-full h-full object-contain"
-                    style={{ maxHeight: '100%', maxWidth: '100%' }}
+                    className="w-full h-full object-cover"
                   />
+                ) : (
+                  <div className="text-gray-500 text-xs flex items-center">
+                    <span className="mr-1">🖼️</span>
+                        No image
+                      </div>
                 )}
+                
+                
               </div>
-              <div className="mt-2 text-sm text-gray-400 whitespace-normal break-words">
-                {scene.voice_over}
+
+              {/* Scene Info */}
+              <div className="space-y-1">
+                {/* Voice Over Text */}
+                <div className="text-xs text-gray-300 line-clamp-2 leading-relaxed">
+                  {scene.voice_over || 'No content'}
+                </div>
+                
+                {/* Scene Stats */}
+                <div className="flex items-center space-x-3 text-xs text-gray-500">
+                  <span className="flex items-center">
+                    <span className="mr-1">🎵</span>
+                    {scene.voice?.audio_base64 ? 'Has audio' : 'No audio'}
+                  </span>
+                  <span className="flex items-center">
+                    <span className="mr-1">📝</span>
+                    {sceneElements[scene.scene_number]?.labels?.length || 0} text
+                  </span>
+                  <span className="flex items-center">
+                    <span className="mr-1">😊</span>
+                    {sceneElements[scene.scene_number]?.stickers?.length || 0} sticker
+                  </span>
+                </div>
               </div>
             </div>
+
+            {/* Selection Indicator */}
+            {selectedScene === scene.scene_number && (
+              <div className="flex-shrink-0">
+                <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+              </div>
+            )}
           </div>
+            </div>
+
+            {/* Transition Selector */}
+            {index < content.length - 1 && videoSettings.individualTransitions[index] && (
+              <TransitionSelector
+                fromScene={scene.scene_number}
+                toScene={content[index + 1].scene_number}
+                transition={videoSettings.individualTransitions[index]}
+                onUpdate={(updates) => updateTransition(index, updates)}
+              />
+            )}
         </div>
       ))}
     </div>
   );
+  };
 
   // Draggable Element Component
-  const DraggableElement = ({ id, type, children, position, style: elementStyle }) => {
+  const DraggableElement = ({ id, type, children, position, style: elementStyle, zIndex = 0 }) => {
     const { attributes, listeners, setNodeRef, transform } = useDraggable({
       id: `${type}-${id}`,
       data: { type, id }
@@ -218,6 +366,46 @@ const TimelineUI = React.forwardRef(({ content = [], onExportScript, ffmpeg }, r
       }
     };
 
+    const handleZIndexChange = (direction) => {
+      setSceneElements(prev => {
+        const currentOverlays = [
+          ...(prev[selectedScene]?.labels || []),
+          ...(prev[selectedScene]?.stickers || []),
+          ...(prev[selectedScene]?.imageOverlays || [])
+        ];
+        
+        const currentElement = currentOverlays.find(el => el.id === id);
+        if (!currentElement) return prev;
+        
+        const currentZIndex = currentElement.zIndex || 0;
+        let newZIndex = currentZIndex;
+        
+        if (direction === 'up') {
+          // Bring to front
+          const maxZIndex = currentOverlays.reduce((max, overlay) => 
+            Math.max(max, overlay.zIndex || 0), 0);
+          newZIndex = maxZIndex + 1;
+        } else if (direction === 'down') {
+          // Send to back
+          const minZIndex = currentOverlays.reduce((min, overlay) => 
+            Math.min(min, overlay.zIndex || 0), 0);
+          newZIndex = Math.max(0, minZIndex - 1);
+        }
+        
+        const arrayName = type === 'sticker' ? 'stickers' : 'labels';
+        
+        return {
+          ...prev,
+          [selectedScene]: {
+            ...prev[selectedScene],
+            [arrayName]: prev[selectedScene][arrayName].map(el =>
+              el.id === id ? { ...el, zIndex: newZIndex } : el
+            )
+          }
+        };
+      });
+    };
+
     const style = {
       ...elementStyle,
       transform: CSS.Translate.toString(transform ? {
@@ -228,7 +416,7 @@ const TimelineUI = React.forwardRef(({ content = [], onExportScript, ffmpeg }, r
       left: `${position.x}%`,
       top: `${position.y}%`,
       cursor: 'move',
-      zIndex: 1000
+      zIndex: 1000 + (zIndex || 0) // Base z-index 1000 + overlay z-index
     };
 
     return (
@@ -246,24 +434,33 @@ const TimelineUI = React.forwardRef(({ content = [], onExportScript, ffmpeg }, r
             children
           )}
           <div className="absolute -top-2 -right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-            <button
-              onClick={handleDelete}
-              className="bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-              </svg>
-            </button>
-            {type === 'label' && (
-              <button
-                onClick={handleEdit}
-                className="bg-blue-500 text-white rounded-full p-1 hover:bg-blue-600 ml-1"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                  <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
-                </svg>
-              </button>
-            )}
+            <div className="flex flex-col gap-1">
+              <div className="flex gap-1">
+                <button
+                  onClick={handleDelete}
+                  className="bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
+                  title="Xóa"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                  </svg>
+                </button>
+                {type === 'label' && (
+                  <button
+                    onClick={handleEdit}
+                    className="bg-blue-500 text-white rounded-full p-1 hover:bg-blue-600"
+                    title="Chỉnh sửa"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                      <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+                    </svg>
+                  </button>
+                )}
+              </div>
+              <div className="bg-black bg-opacity-75 text-white text-xs px-1 rounded text-center font-bold">
+                Z: {zIndex || 0}
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -395,12 +592,15 @@ const TimelineUI = React.forwardRef(({ content = [], onExportScript, ffmpeg }, r
             {elements && (
               <>
                 {/* Stickers */}
-                {elements.stickers.map(sticker => (
+                {elements.stickers
+                  .sort((a, b) => (a.zIndex || 0) - (b.zIndex || 0)) // Sort by z-index
+                  .map(sticker => (
                   <DraggableElement
                     key={sticker.id}
                     id={sticker.id}
                     type="sticker"
                     position={sticker.position}
+                    zIndex={sticker.zIndex}
                     style={{
                       fontSize: '2rem',
                       transform: `scale(${sticker.scale}) rotate(${sticker.rotation}deg)`
@@ -410,48 +610,59 @@ const TimelineUI = React.forwardRef(({ content = [], onExportScript, ffmpeg }, r
                   </DraggableElement>
                 ))}
                 {/* Labels */}
-                {elements.labels.map(label => (
+                {elements.labels
+                  .sort((a, b) => (a.zIndex || 0) - (b.zIndex || 0)) // Sort by z-index
+                  .map(label => (
                   <DraggableElement
                     key={label.id}
                     id={label.id}
                     type="label"
                     position={label.position}
+                    zIndex={label.zIndex}
                     style={label.style}
                   >
                     {label.text}
                   </DraggableElement>
                 ))}
-                {elements.imageOverlays?.map(overlay => (
-                  <DraggableElement
-                    key={overlay.id}
-                    id={overlay.id}
-                    type="imageOverlay"
-                    position={overlay.position}
-                    style={{
-                      transform: `scale(${overlay.scale}) rotate(${overlay.rotation}deg)`,
-                      opacity: overlay.opacity,
-                      width: `${overlay.displayDimensions.width}px`,
-                      height: `${overlay.displayDimensions.height}px`,
-                      position: 'absolute',
-                      cursor: 'move'
-                    }}
-                  >
-                    <div 
-                      className="relative group w-full h-full"
-                      onClick={() => handleImageOverlayClick(overlay)}
+                {elements.imageOverlays?.map(overlay => {
+                  console.log(`[Preview Overlay ${overlay.id}] Rendering with:`, {
+                    scaleInfo: overlay.scaleInfo,
+                    displayDimensions: overlay.displayDimensions,
+                    userScale: overlay.scale,
+                    position: overlay.position
+                  });
+                  
+                  return (
+                    <DraggableElement
+                      key={overlay.id}
+                      id={overlay.id}
+                      type="imageOverlay"
+                      position={overlay.position}
+                      style={{
+                        // Chỉ opacity ở đây, scale và rotation sẽ áp dụng trong img
+                        opacity: overlay.opacity,
+                        width: `${overlay.displayDimensions.width}px`,
+                        height: `${overlay.displayDimensions.height}px`,
+                        position: 'absolute',
+                        cursor: 'move'
+                      }}
                     >
-                      <img
-                        src={overlay.source}
-                        alt="Overlay"
-                        style={{
-                          width: '100%',
-                          height: '100%',
-                          objectFit: 'contain',
-                          pointerEvents: 'none',
-                          transform: `scale(${overlay.scale}) rotate(${overlay.rotation}deg)`,
-                          opacity: overlay.opacity
-                        }}
-                      />
+                      <div 
+                        className="relative group w-full h-full"
+                        onClick={() => handleImageOverlayClick(overlay)}
+                      >
+                        <img
+                          src={overlay.source}
+                          alt="Overlay"
+                          style={{
+                            width: '100%',
+                            height: '100%',
+                            objectFit: 'contain',
+                            pointerEvents: 'none',
+                            transform: `scale(${overlay.scale || 1}) rotate(${overlay.rotation}deg)`,
+                            opacity: overlay.opacity
+                          }}
+                        />
                       <div className="absolute -top-2 -right-2 opacity-0 group-hover:opacity-100 transition-opacity">
                         <button
                           onClick={(e) => {
@@ -473,15 +684,16 @@ const TimelineUI = React.forwardRef(({ content = [], onExportScript, ffmpeg }, r
                       </div>
                     </div>
                   </DraggableElement>
-                ))}
+                );
+                })}
               </>
             )}
           </div>
         </DndContext>
 
         {/* Timeline */}
-        <div className="bg-gray-800/50 p-4 rounded-lg">
-          <div className="flex items-center space-x-4 mb-4">
+        <div className="bg-gray-800/50 p-3 rounded-lg border border-gray-600">
+          <div className="flex items-center space-x-3 mb-3">
             <button
               onClick={() => {
                 const audio = audioRefs.current[`voice_${selectedScene}`];
@@ -494,7 +706,7 @@ const TimelineUI = React.forwardRef(({ content = [], onExportScript, ffmpeg }, r
                   }
                 }
               }}
-              className="p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+              className="p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
             >
               {isPlaying ? '⏸️' : '▶️'}
             </button>
@@ -521,217 +733,384 @@ const TimelineUI = React.forwardRef(({ content = [], onExportScript, ffmpeg }, r
           </div>
         </div>
 
-        {/* Controls */}
-        <div className="grid grid-cols-2 gap-4">
-          {/* Audio Controls */}
-          <div className="bg-gray-800/50 p-4 rounded-lg space-y-4">
-            <h3 className="text-white font-medium">Âm thanh và Thời lượng</h3>
-            <div>
-              <label className="block text-sm text-gray-400 mb-2">Thời lượng scene (s)</label>
-              <input
-                type="number"
-                min="1"
-                max="60"
-                step="0.5"
-                value={elements.duration || 5}
-                onChange={(e) => setSceneElements(prev => ({
-                  ...prev,
-                  [selectedScene]: {
-                    ...prev[selectedScene],
-                    duration: parseFloat(e.target.value)
-                  }
-                }))}
-                className="w-full bg-gray-700 text-white rounded p-1"
-              />
-              <small className="text-xs text-gray-500 mt-1 block">
-                Khi tạo video, thời lượng sẽ được tính từ audio nếu có. Giá trị này sẽ được sử dụng nếu không có audio.
-              </small>
-            </div>
-            <div className="mt-4">
-              <label className="block text-sm text-gray-400 mb-2">Âm lượng</label>
-              <input
-                type="range"
-                min="0"
-                max="1"
-                step="0.1"
-                value={elements.audio.volume}
-                onChange={(e) => setSceneElements(prev => ({
-                  ...prev,
-                  [selectedScene]: {
-                    ...prev[selectedScene],
-                    audio: { ...prev[selectedScene].audio, volume: parseFloat(e.target.value) }
-                  }
-                }))}
-                className="w-full"
-              />
-            </div>
-            <div>
-              <label className="block text-sm text-gray-400 mb-2">Fade In (s)</label>
-              <input
-                type="number"
-                min="0"
-                max="5"
-                step="0.1"
-                value={elements.audio.fadeIn}
-                onChange={(e) => setSceneElements(prev => ({
-                  ...prev,
-                  [selectedScene]: {
-                    ...prev[selectedScene],
-                    audio: { ...prev[selectedScene].audio, fadeIn: parseFloat(e.target.value) }
-                  }
-                }))}
-                className="w-full bg-gray-700 text-white rounded p-1"
-              />
-            </div>
-            <div>
-              <label className="block text-sm text-gray-400 mb-2">Fade Out (s)</label>
-              <input
-                type="number"
-                min="0"
-                max="5"
-                step="0.1"
-                value={elements.audio.fadeOut}
-                onChange={(e) => setSceneElements(prev => ({
-                  ...prev,
-                  [selectedScene]: {
-                    ...prev[selectedScene],
-                    audio: { ...prev[selectedScene].audio, fadeOut: parseFloat(e.target.value) }
-                  }
-                }))}
-                className="w-full bg-gray-700 text-white rounded p-1"
-              />
-            </div>
+        {/* Scene Controls with Tabs */}
+        <div className="bg-gray-800/50 rounded-lg border border-gray-600">
+          {/* Tab Headers */}
+          <div className="flex border-b border-gray-600">
+            <button
+              onClick={() => setSceneElements(prev => ({
+                ...prev,
+                [selectedScene]: {
+                  ...prev[selectedScene],
+                  activeTab: 'audio'
+                }
+              }))}
+              className={`px-4 py-2 text-sm font-medium transition-colors ${
+                elements.activeTab === 'audio' 
+                  ? 'bg-blue-600 text-white' 
+                  : 'text-gray-400 hover:text-white hover:bg-gray-700'
+              }`}
+            >
+              🎵 Âm thanh
+            </button>
+            <button
+              onClick={() => setSceneElements(prev => ({
+                ...prev,
+                [selectedScene]: {
+                  ...prev[selectedScene],
+                  activeTab: 'image'
+                }
+              }))}
+              className={`px-4 py-2 text-sm font-medium transition-colors ${
+                elements.activeTab === 'image' 
+                  ? 'bg-blue-600 text-white' 
+                  : 'text-gray-400 hover:text-white hover:bg-gray-700'
+              }`}
+            >
+              🖼️ Hình ảnh
+            </button>
+            <button
+              onClick={() => setSceneElements(prev => ({
+                ...prev,
+                [selectedScene]: {
+                  ...prev[selectedScene],
+                  activeTab: 'elements'
+                }
+              }))}
+              className={`px-4 py-2 text-sm font-medium transition-colors ${
+                elements.activeTab === 'elements' 
+                  ? 'bg-blue-600 text-white' 
+                  : 'text-gray-400 hover:text-white hover:bg-gray-700'
+              }`}
+            >
+              ✨ Elements
+            </button>
           </div>
 
-          {/* Image Controls */}
-          <div className="bg-gray-800/50 p-4 rounded-lg space-y-4">
-            <h3 className="text-white font-medium">Hình ảnh</h3>
-            <div>
-              <label className="block text-sm text-gray-400 mb-2">Scale</label>
-              <input
-                type="range"
-                min="0.5"
-                max="2"
-                step="0.1"
-                value={elements.image.scale}
-                onChange={(e) => setSceneElements(prev => ({
-                  ...prev,
-                  [selectedScene]: {
-                    ...prev[selectedScene],
-                    image: { ...prev[selectedScene].image, scale: parseFloat(e.target.value) }
-                  }
-                }))}
-                className="w-full"
-              />
-            </div>
-            <div>
-              <label className="block text-sm text-gray-400 mb-2">Rotation</label>
-              <input
-                type="range"
-                min="-180"
-                max="180"
-                value={elements.image.rotation}
-                onChange={(e) => setSceneElements(prev => ({
-                  ...prev,
-                  [selectedScene]: {
-                    ...prev[selectedScene],
-                    image: { ...prev[selectedScene].image, rotation: parseInt(e.target.value) }
-                  }
-                }))}
-                className="w-full"
-              />
-            </div>
-            <div>
-              <label className="block text-sm text-gray-400 mb-2">Brightness</label>
-              <input
-                type="range"
-                min="-1"
-                max="1"
-                step="0.1"
-                value={elements.image.brightness}
-                onChange={(e) => setSceneElements(prev => ({
-                  ...prev,
-                  [selectedScene]: {
-                    ...prev[selectedScene],
-                    image: { ...prev[selectedScene].image, brightness: parseFloat(e.target.value) }
-                  }
-                }))}
-                className="w-full"
-              />
-            </div>
-            <div>
-              <label className="block text-sm text-gray-400 mb-2">Contrast</label>
-              <input
-                type="range"
-                min="0"
-                max="2"
-                step="0.1"
-                value={elements.image.contrast}
-                onChange={(e) => setSceneElements(prev => ({
-                  ...prev,
-                  [selectedScene]: {
-                    ...prev[selectedScene],
-                    image: { ...prev[selectedScene].image, contrast: parseFloat(e.target.value) }
-                  }
-                }))}
-                className="w-full"
-              />
-            </div>
-            <div>
-              <label className="block text-sm text-gray-400 mb-2">Saturation</label>
-              <input
-                type="range"
-                min="0"
-                max="2"
-                step="0.1"
-                value={elements.image.saturation}
-                onChange={(e) => setSceneElements(prev => ({
-                  ...prev,
-                  [selectedScene]: {
-                    ...prev[selectedScene],
-                    image: { ...prev[selectedScene].image, saturation: parseFloat(e.target.value) }
-                  }
-                }))}
-                className="w-full"
-              />
-            </div>
+          {/* Tab Content */}
+          <div className="p-4">
+            {/* Audio Tab */}
+            {elements.activeTab === 'audio' && (
+              <div className="space-y-3">
+                {/* Audio Effects */}
+                <div className="bg-gray-700/50 rounded-lg p-3">
+                  <h4 className="text-sm text-white font-medium mb-3">🎵 Audio Effects</h4>
+                  <div className="grid grid-cols-2 gap-3">
+                <div>
+                      <label className="block text-xs text-gray-400 mb-1">Âm lượng ({videoSettings.audioEffects.volume})</label>
+                  <input
+                        type="range"
+                        min="0"
+                        max="2"
+                        step="0.1"
+                        value={videoSettings.audioEffects.volume}
+                        onChange={(e) => setVideoSettings(prev => ({
+                      ...prev,
+                          audioEffects: {
+                            ...prev.audioEffects,
+                            volume: Number(e.target.value)
+                      }
+                    }))}
+                        className="w-full"
+                  />
+                </div>
+                
+                <div>
+                      <label className="block text-xs text-gray-400 mb-1">Fade In ({videoSettings.audioEffects.fadeIn}s)</label>
+                    <input
+                      type="range"
+                      min="0"
+                        max="5"
+                      step="0.1"
+                        value={videoSettings.audioEffects.fadeIn}
+                        onChange={(e) => setVideoSettings(prev => ({
+                        ...prev,
+                          audioEffects: {
+                            ...prev.audioEffects,
+                            fadeIn: Number(e.target.value)
+                        }
+                      }))}
+                        className="w-full"
+                    />
+                </div>
+                
+                  <div>
+                      <label className="block text-xs text-gray-400 mb-1">Fade Out ({videoSettings.audioEffects.fadeOut}s)</label>
+                    <input
+                        type="range"
+                      min="0"
+                      max="5"
+                      step="0.1"
+                        value={videoSettings.audioEffects.fadeOut}
+                        onChange={(e) => setVideoSettings(prev => ({
+                        ...prev,
+                          audioEffects: {
+                            ...prev.audioEffects,
+                            fadeOut: Number(e.target.value)
+                        }
+                      }))}
+                        className="w-full"
+                    />
+                  </div>
+
+                  <div>
+                      <label className="block text-xs text-gray-400 mb-1">Bass ({videoSettings.audioEffects.bass})</label>
+                    <input
+                        type="range"
+                        min="-20"
+                        max="20"
+                        step="1"
+                        value={videoSettings.audioEffects.bass}
+                        onChange={(e) => setVideoSettings(prev => ({
+                        ...prev,
+                          audioEffects: {
+                            ...prev.audioEffects,
+                            bass: Number(e.target.value)
+                        }
+                      }))}
+                        className="w-full"
+                    />
+                  </div>
+
+                    <div>
+                      <label className="block text-xs text-gray-400 mb-1">Treble ({videoSettings.audioEffects.treble})</label>
+                      <input
+                        type="range"
+                        min="-20"
+                        max="20"
+                        step="1"
+                        value={videoSettings.audioEffects.treble}
+                        onChange={(e) => setVideoSettings(prev => ({
+                          ...prev,
+                          audioEffects: {
+                            ...prev.audioEffects,
+                            treble: Number(e.target.value)
+                          }
+                        }))}
+                        className="w-full"
+                      />
+                    </div>
+
+                    <div className="flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        checked={videoSettings.audioEffects.normalize}
+                        onChange={(e) => setVideoSettings(prev => ({
+                          ...prev,
+                          audioEffects: {
+                            ...prev.audioEffects,
+                            normalize: e.target.checked
+                          }
+                        }))}
+                        className="form-checkbox w-3 h-3"
+                      />
+                      <label className="text-xs text-gray-300">Normalize audio</label>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Audio Quality */}
+                <div className="bg-gray-700/50 rounded-lg p-3">
+                  <h4 className="text-sm text-white font-medium mb-3">🎚️ Audio Quality</h4>
+                  <div className="text-xs text-gray-400 space-y-1">
+                    <p>• Normalize: Tự động điều chỉnh âm lượng để đồng nhất</p>
+                    <p>• Bass: Tăng/giảm âm trầm (-20 đến +20dB)</p>
+                    <p>• Treble: Tăng/giảm âm cao (-20 đến +20dB)</p>
+                    <p>• Fade In/Out: Hiệu ứng âm thanh mượt mà</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Image Tab */}
+            {elements.activeTab === 'image' && (
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-400 mb-1">
+                      Scale ({elements.image.scale})
+                    </label>
+                    <div className="flex items-center space-x-2">
+                      <input
+                        type="range"
+                        min="0.5"
+                        max="2"
+                        step="0.1"
+                        value={elements.image.scale}
+                        onChange={(e) => setSceneElements(prev => ({
+                          ...prev,
+                          [selectedScene]: {
+                            ...prev[selectedScene],
+                            image: { ...prev[selectedScene].image, scale: parseFloat(e.target.value) }
+                          }
+                        }))}
+                        className="flex-1"
+                      />
+                      <span className="text-xs text-gray-300 min-w-[2rem] text-center">
+                        {elements.image.scale}
+                      </span>
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-xs font-medium text-gray-400 mb-1">
+                      Rotation ({elements.image.rotation}°)
+                    </label>
+                    <div className="flex items-center space-x-2">
+                      <input
+                        type="range"
+                        min="-180"
+                        max="180"
+                        value={elements.image.rotation}
+                        onChange={(e) => setSceneElements(prev => ({
+                          ...prev,
+                          [selectedScene]: {
+                            ...prev[selectedScene],
+                            image: { ...prev[selectedScene].image, rotation: parseInt(e.target.value) }
+                          }
+                        }))}
+                        className="flex-1"
+                      />
+                      <span className="text-xs text-gray-300 min-w-[3rem] text-center">
+                        {elements.image.rotation}°
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-400 mb-1">
+                      Brightness ({elements.image.brightness})
+                    </label>
+                    <div className="flex items-center space-x-2">
+                      <input
+                        type="range"
+                        min="-1"
+                        max="1"
+                        step="0.1"
+                        value={elements.image.brightness}
+                        onChange={(e) => setSceneElements(prev => ({
+                          ...prev,
+                          [selectedScene]: {
+                            ...prev[selectedScene],
+                            image: { ...prev[selectedScene].image, brightness: parseFloat(e.target.value) }
+                          }
+                        }))}
+                        className="flex-1"
+                      />
+                      <span className="text-xs text-gray-300 min-w-[2rem] text-center">
+                        {elements.image.brightness}
+                      </span>
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-xs font-medium text-gray-400 mb-1">
+                      Contrast ({elements.image.contrast})
+                    </label>
+                    <div className="flex items-center space-x-2">
+                      <input
+                        type="range"
+                        min="0"
+                        max="2"
+                        step="0.1"
+                        value={elements.image.contrast}
+                        onChange={(e) => setSceneElements(prev => ({
+                          ...prev,
+                          [selectedScene]: {
+                            ...prev[selectedScene],
+                            image: { ...prev[selectedScene].image, contrast: parseFloat(e.target.value) }
+                          }
+                        }))}
+                        className="flex-1"
+                      />
+                      <span className="text-xs text-gray-300 min-w-[2rem] text-center">
+                        {elements.image.contrast}
+                      </span>
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-xs font-medium text-gray-400 mb-1">
+                      Saturation ({elements.image.saturation})
+                    </label>
+                    <div className="flex items-center space-x-2">
+                      <input
+                        type="range"
+                        min="0"
+                        max="2"
+                        step="0.1"
+                        value={elements.image.saturation}
+                        onChange={(e) => setSceneElements(prev => ({
+                          ...prev,
+                          [selectedScene]: {
+                            ...prev[selectedScene],
+                            image: { ...prev[selectedScene].image, saturation: parseFloat(e.target.value) }
+                          }
+                        }))}
+                        className="flex-1"
+                      />
+                      <span className="text-xs text-gray-300 min-w-[2rem] text-center">
+                        {elements.image.saturation}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Elements Tab */}
+            {elements.activeTab === 'elements' && (
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                  onClick={() => setShowImageModal(true)}
+                  className="w-full p-3 bg-gray-700 text-white rounded-lg hover:bg-gray-600 transition-colors flex items-center justify-center space-x-2"
+                >
+                  <span>🖼️</span>
+                  <span className="text-sm">Add Image Overlay</span>
+                </button>
+                  <button
+                    onClick={() => setShowTextModal(true)}
+                    className="p-3 bg-gray-700 text-white rounded-lg hover:bg-gray-600 transition-colors flex items-center justify-center space-x-2"
+                  >
+                    <span>📝</span>
+                    <span className="text-sm">Add Text</span>
+                  </button>
+                </div>
+                
+                
+
+                {/* Z-Index Manager */}
+                <ZIndexManager 
+                  sceneElements={sceneElements}
+                  selectedScene={selectedScene}
+                  setSceneElements={setSceneElements}
+                />
+
+                {/* Elements Summary */}
+                <div className="bg-gray-700/50 p-3 rounded-lg">
+                  <h4 className="text-xs font-medium text-gray-300 mb-2">Current Elements:</h4>
+                  <div className="space-y-1 text-xs text-gray-400">
+                    <div className="flex justify-between">
+                      <span>Stickers:</span>
+                      <span>{elements.stickers?.length || 0}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Text:</span>
+                      <span>{elements.labels?.length || 0}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Image Overlays:</span>
+                      <span>{elements.imageOverlays?.length || 0}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
-
-        {/* Add Elements */}
-        <div className="grid grid-cols-2 gap-4">
-          <button
-            onClick={() => setShowStickerModal(true)}
-            className="p-4 bg-gray-800/50 text-white rounded-lg hover:bg-gray-700"
-          >
-            😊 Thêm Sticker
-          </button>
-          <button
-            onClick={() => setShowTextModal(true)}
-            className="p-4 bg-gray-800/50 text-white rounded-lg hover:bg-gray-700"
-          >
-            📝 Thêm Text
-          </button>
-        </div>
-
-        {/* Audio Element */}
-        {scene?.voice?.audio_base64 && (
-          <audio
-            ref={el => audioRefs.current[`voice_${selectedScene}`] = el}
-            src={`data:audio/mp3;base64,${scene.voice.audio_base64}`}
-            className="hidden"
-            onTimeUpdate={(e) => setCurrentTime(e.target.currentTime)}
-            onEnded={() => setIsPlaying(false)}
-          />
-        )}
-
-        {/* Image Overlay */}
-        <button
-          onClick={() => setShowImageModal(true)}
-          className="p-4 bg-gray-800/50 text-white rounded-lg hover:bg-gray-700"
-        >
-          🖼️ Thêm Ảnh Overlay
-        </button>
       </div>
     );
   };
@@ -756,34 +1135,49 @@ const generateAndExportScript = async () => {
     }
 
     try {
+      console.log('=== SCRIPT GENERATION DEBUG ===');
       console.log('Đang tạo script với FFmpeg:', !!ffmpeg);
+      console.log('VideoSettings:', videoSettings);
+      console.log('IndividualTransitions:', videoSettings.individualTransitions);
+      console.log('IndividualTransitions length:', videoSettings.individualTransitions?.length);
+      console.log('Content length:', content?.length);
+      
+      // Log chi tiết từng individual transition
+      if (videoSettings.individualTransitions) {
+        console.log('=== INDIVIDUAL TRANSITIONS DETAIL ===');
+        videoSettings.individualTransitions.forEach((transition, index) => {
+          console.log(`Transition ${index}:`, {
+            id: transition.id,
+            fromScene: transition.fromScene,
+            toScene: transition.toScene,
+            type: transition.type,
+            duration: transition.duration,
+            isActive: transition.type !== 'none'
+          });
+        });
+      }
+      
       // Truyền ffmpeg vào hàm generateScript nếu có
       const script = await generateScript(content, videoSettings, sceneElements, ffmpeg);
       
-      // Gọi callback để đưa script về parent component mà không tải JSON về
+      console.log('=== GENERATED SCRIPT DEBUG ===');
+      console.log('Script global transitions:', script.global?.transitions);
+      console.log('Script individual transitions:', script.global?.transitions?.individualTransitions);
+      console.log('Script scenes count:', script.scenes?.length);
+      
+      // Cập nhật scriptId nếu có
+      if (scriptId) {
+        script.id = scriptId;
+        console.log('Đã cập nhật script ID:', scriptId);
+        console.log('Script sau khi cập nhật ID:', script);
+      } else {
+        console.log('Không có scriptId để cập nhật');
+      }
+      
+      // Gọi callback để đưa script về parent
       if (onExportScript) {
         onExportScript(script);
       }
-
-      // Tạo file JSON và tải xuống
-      const scriptJson = JSON.stringify(script, null, 2); // Thêm indent để dễ đọc
-      const scriptBlob = new Blob([scriptJson], { type: 'application/json' });
-      const scriptUrl = URL.createObjectURL(scriptBlob);
-      
-      // Tạo tên file với timestamp
-      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-      const fileName = `ffmpeg-script-${timestamp}.json`;
-      
-      // Tạo link tải xuống
-      const downloadLink = document.createElement('a');
-      downloadLink.href = scriptUrl;
-      downloadLink.download = fileName;
-      document.body.appendChild(downloadLink);
-      downloadLink.click();
-      
-      // Dọn dẹp
-      document.body.removeChild(downloadLink);
-      URL.revokeObjectURL(scriptUrl);
       
       return script;
     } catch (error) {
@@ -802,6 +1196,13 @@ const generateAndExportScript = async () => {
     const scene = content.find(s => s.scene_number === selectedScene);
     const sceneDuration = scene?.duration || 5;
     
+    // Get preview container dimensions for proper positioning
+    const previewContainer = previewRef.current;
+    const previewDimensions = previewContainer ? {
+      width: previewContainer.offsetWidth,
+      height: previewContainer.offsetHeight
+    } : { width: 854, height: 480 };
+    
     if (editingTextId) {
       // When editing, ensure that the end time doesn't exceed scene duration
       const updatedEndTime = Math.min(textStyle.endTime, sceneDuration);
@@ -819,7 +1220,8 @@ const generateAndExportScript = async () => {
                   timing: {
                     start: textStyle.startTime,
                     end: updatedEndTime
-                  }
+                  },
+                  previewDimensions
                 }
               : label
           )
@@ -827,18 +1229,33 @@ const generateAndExportScript = async () => {
       }));
       setEditingTextId(null);
     } else {
+      // Get highest z-index in current scene
+      const existingOverlays = [
+        ...(sceneElements[selectedScene]?.labels || []),
+        ...(sceneElements[selectedScene]?.stickers || []),
+        ...(sceneElements[selectedScene]?.imageOverlays || [])
+      ];
+      const maxZIndex = existingOverlays.reduce((max, overlay) => 
+        Math.max(max, overlay.zIndex || 0), 0);
+      
       // Ensure the end time doesn't exceed scene duration
       const endTime = Math.min(textStyle.endTime, sceneDuration);
       
       const newLabel = {
         id: Date.now(),
         text: textInput,
-        position: { x: 50, y: 50 },
+        position: { 
+          x: 50, // percentage
+          y: 50, // percentage
+          unit: 'percentage'
+        },
         style: textStyle,
         timing: {
           start: textStyle.startTime,
           end: endTime
-        }
+        },
+        zIndex: maxZIndex + 1,
+        previewDimensions
       };
       setSceneElements(prev => ({
         ...prev,
@@ -859,6 +1276,22 @@ const generateAndExportScript = async () => {
     const scene = content.find(s => s.scene_number === selectedScene);
     const sceneDuration = scene?.duration || 5;
     
+    // Get preview container dimensions for proper positioning
+    const previewContainer = previewRef.current;
+    const previewDimensions = previewContainer ? {
+      width: previewContainer.offsetWidth,
+      height: previewContainer.offsetHeight
+    } : { width: 854, height: 480 };
+    
+    // Get highest z-index in current scene
+    const existingOverlays = [
+      ...(sceneElements[selectedScene]?.labels || []),
+      ...(sceneElements[selectedScene]?.stickers || []),
+      ...(sceneElements[selectedScene]?.imageOverlays || [])
+    ];
+    const maxZIndex = existingOverlays.reduce((max, overlay) => 
+      Math.max(max, overlay.zIndex || 0), 0);
+    
     // Ensure the end time doesn't exceed scene duration
     const endTime = Math.min(stickerSettings.endTime, sceneDuration);
     
@@ -866,13 +1299,19 @@ const generateAndExportScript = async () => {
       id: Date.now(),
       type: sticker.type,
       content: sticker.content,
-      position: { x: 50, y: 50 },
+      position: { 
+        x: 50, // percentage
+        y: 50, // percentage
+        unit: 'percentage'
+      },
       scale: 1,
       rotation: 0,
       timing: {
         start: stickerSettings.startTime,
         end: endTime
-      }
+      },
+      zIndex: maxZIndex + 1,
+      previewDimensions
     };
     setSceneElements(prev => ({
       ...prev,
@@ -905,46 +1344,57 @@ const generateAndExportScript = async () => {
     }
   };
 
-  // Thêm hàm tính toán tỷ lệ scale
-  const calculateOverlayScale = (overlayImage, scenePreview) => {
-    // Lấy kích thước preview của scene
-    const previewWidth = scenePreview?.width || parseInt(videoSettings.resolution.split('x')[0]);
-    const previewHeight = scenePreview?.height || parseInt(videoSettings.resolution.split('x')[1]);
-
-    // Tính tỷ lệ scale của scene preview so với kích thước thực
-    const sceneScaleRatio = Math.min(
-      previewWidth / parseInt(videoSettings.resolution.split('x')[0]),
-      previewHeight / parseInt(videoSettings.resolution.split('x')[1])
-    );
-
-    // Tính toán kích thước mới cho overlay dựa trên cạnh dài nhất
-    const maxDimension = 100; // Kích thước tối đa cho cạnh dài nhất
-    const isWidthLonger = overlayImage.width > overlayImage.height;
+  // Thêm hàm tính toán tỷ lệ scale - sửa lại cho chính xác WYSIWYG
+  const calculateOverlayScale = (overlayImage, scenePreview, userScale = 1) => {
+    // Lấy kích thước output thực tế của video
+    const [outputWidth, outputHeight] = videoSettings.resolution.split('x').map(Number);
     
-    let newWidth, newHeight;
-    if (isWidthLonger) {
-      newWidth = maxDimension;
-      newHeight = (overlayImage.height / overlayImage.width) * maxDimension;
-    } else {
-      newHeight = maxDimension;
-      newWidth = (overlayImage.width / overlayImage.height) * maxDimension;
-    }
+    // Lấy kích thước preview của scene từ DOM element
+    const previewWidth = scenePreview?.width || outputWidth;
+    const previewHeight = scenePreview?.height || outputHeight;
 
-    // Tính toán scale factor để chuyển đổi từ kích thước gốc sang kích thước hiển thị
-    const displayScale = Math.min(
-      newWidth / overlayImage.width,
-      newHeight / overlayImage.height
-    );
-
-    // Tính toán scale factor cuối cùng cho FFmpeg
-    const finalScale = displayScale / sceneScaleRatio;
+    // Tính tỷ lệ giữa preview container và output video
+    const previewToOutputScaleX = outputWidth / previewWidth;
+    const previewToOutputScaleY = outputHeight / previewHeight;
+    
+    // Cho overlay image một kích thước cơ sở trong preview (ví dụ: 120px chiều rộng)
+    const basePreviewWidth = 120;
+    const aspectRatio = overlayImage.width / overlayImage.height;
+    const basePreviewHeight = basePreviewWidth / aspectRatio;
+    
+    // Áp dụng user scale vào kích thước preview
+    const targetPreviewWidth = basePreviewWidth * userScale;
+    const targetPreviewHeight = basePreviewHeight * userScale;
+    
+    // Tính scale factor từ kích thước gốc sang kích thước preview cuối cùng (đã áp dụng user scale)
+    const previewScale = targetPreviewWidth / overlayImage.width;
+    
+    // Tính scale factor cho output video (để giữ nguyên tỷ lệ kích thước)
+    const outputScale = previewScale * previewToOutputScaleX;
+    
+    console.log(`[calculateOverlayScale] Detailed calculations:`, {
+      originalSize: { width: overlayImage.width, height: overlayImage.height },
+      previewContainer: { width: previewWidth, height: previewHeight },
+      outputVideo: { width: outputWidth, height: outputHeight },
+      basePreviewSize: { width: basePreviewWidth, height: basePreviewHeight },
+      userScale: userScale,
+      targetPreviewSize: { width: targetPreviewWidth, height: targetPreviewHeight },
+      scales: {
+        previewScale: previewScale,
+        outputScale: outputScale,
+        previewToOutputScaleX: previewToOutputScaleX,
+        previewToOutputScaleY: previewToOutputScaleY
+      }
+    });
 
     return {
-      displayScale,
-      finalScale,
+      previewScale, // Scale để hiển thị trong preview
+      outputScale, // Scale để sử dụng trong FFmpeg
+      previewToOutputScaleX,
+      previewToOutputScaleY,
       displayDimensions: {
-        width: newWidth,
-        height: newHeight
+        width: basePreviewWidth, // Giữ kích thước base, user scale sẽ áp dụng vào transform
+        height: basePreviewHeight
       }
     };
   };
@@ -980,7 +1430,7 @@ const generateAndExportScript = async () => {
     }
 
     // Tính toán tỷ lệ scale
-    const scaleInfo = calculateOverlayScale(selectedImage, scenePreview);
+    const scaleInfo = calculateOverlayScale(selectedImage, scenePreview, imageOverlaySettings.scale);
     
     const newImageOverlay = {
       id: Date.now(),
@@ -991,13 +1441,15 @@ const generateAndExportScript = async () => {
         height: selectedImage.height
       },
       displayDimensions: scaleInfo.displayDimensions,
-      position: { x: 50, y: 50 }, // Vị trí mặc định ở giữa
-      scale: imageOverlaySettings.scale,
+      position: { x: 50, y: 50, unit: 'percentage' }, // Vị trí mặc định ở giữa
+      scale: imageOverlaySettings.scale, // Scale từ user input (1.0 = no change)
       rotation: imageOverlaySettings.rotation,
       opacity: imageOverlaySettings.opacity,
       scaleInfo: {
-        displayScale: scaleInfo.displayScale,
-        finalScale: scaleInfo.finalScale
+        previewScale: scaleInfo.previewScale,
+        outputScale: scaleInfo.outputScale,
+        previewToOutputScaleX: scaleInfo.previewToOutputScaleX,
+        previewToOutputScaleY: scaleInfo.previewToOutputScaleY
       },
       timing: {
         start: imageOverlaySettings.startTime,
@@ -1047,920 +1499,786 @@ const generateAndExportScript = async () => {
 
   // Thêm hàm cập nhật image overlay
   const handleUpdateImageOverlay = (updates) => {
+    console.log('[TimelineUI] Updating image overlay:', { editingImageOverlay, updates });
+    
+    // Nếu scale thay đổi, cần tính lại scaleInfo
+    let updatedOverlay = { ...editingImageOverlay, ...updates };
+    
+    if (updates.scale !== undefined && updates.scale !== editingImageOverlay.scale) {
+      console.log('[TimelineUI] Scale changed, recalculating scaleInfo');
+      
+      // Lấy kích thước preview của scene
+      let scenePreview;
+      if (previewRef.current) {
+        const previewRect = previewRef.current.getBoundingClientRect();
+        scenePreview = {
+          width: previewRect.width,
+          height: previewRect.height
+        };
+      } else {
+        // Nếu previewRef chưa sẵn sàng, sử dụng kích thước từ videoSettings
+        const [outputWidth, outputHeight] = videoSettings.resolution.split('x').map(Number);
+        scenePreview = {
+          width: outputWidth,
+          height: outputHeight
+        };
+      }
+      
+      // Tạo object image từ originalDimensions
+      const overlayImage = {
+        width: editingImageOverlay.originalDimensions.width,
+        height: editingImageOverlay.originalDimensions.height
+      };
+      
+      // Tính lại scaleInfo với user scale mới
+      const newScaleInfo = calculateOverlayScale(overlayImage, scenePreview, updates.scale);
+      
+      updatedOverlay = {
+        ...updatedOverlay,
+        scaleInfo: newScaleInfo
+      };
+      
+      console.log('[TimelineUI] Updated scaleInfo:', newScaleInfo);
+    }
+    
     setSceneElements(prev => ({
       ...prev,
       [selectedScene]: {
         ...prev[selectedScene],
         imageOverlays: prev[selectedScene].imageOverlays.map(el =>
           el.id === editingImageOverlay.id
-            ? { ...el, ...updates }
+            ? updatedOverlay
             : el
         )
       }
     }));
-    setEditingImageOverlay(prev => ({ ...prev, ...updates }));
+    setEditingImageOverlay(updatedOverlay);
+    
+    console.log('[TimelineUI] Updated imageOverlays for scene', selectedScene);
   };
 
-  return (
-    <div className="bg-gray-800/50 p-6 rounded-lg space-y-4 timeline-component">
-       {/* Video Settings */}
-       <div className="bg-gray-800/50 p-6 rounded-lg">
-        <h4 className="text-lg font-medium text-white mb-4">Cài đặt video</h4>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* Resolution */}
-          <div>
-            <label className="block text-sm font-medium text-gray-400 mb-2">
-              Độ phân giải
-            </label>
-            <select
-              value={videoSettings.resolution}
-              onChange={(e) => setVideoSettings(prev => ({
-                ...prev,
-                resolution: e.target.value
-              }))}
-              className="w-full bg-gray-700 text-white rounded-lg p-2"
-            >
-              <option value="1920x1080">1920x1080 (Full HD)</option>
-              <option value="1280x720">1280x720 (HD)</option>
-              <option value="854x480">854x480 (480p)</option>
-            </select>
-          </div>
+  // Transition Selector Component
+  const TransitionSelector = ({ fromScene, toScene, transition, onUpdate }) => {
+    const [isExpanded, setIsExpanded] = useState(false);
+    
+    const availableTransitions = [
+      { value: 'none', label: 'None', icon: '—', description: 'No transition effect' },
+      { value: 'fade', label: 'Fade', icon: '✨', description: 'Fade from this scene to another' },
+      { value: 'slide', label: 'Slide', icon: '➡️', description: 'Slide from left to right' },
+      { value: 'zoom', label: 'Zoom', icon: '🔍', description: 'Zoom in/out when transitioning' },
+      { value: 'blur', label: 'Blur', icon: '🌫️', description: 'Blur transition' },
+      { value: 'wipe', label: 'Wipe', icon: '🧹', description: 'Wipe from right to left' },
+      { value: 'dissolve', label: 'Dissolve', icon: '💫', description: 'Dissolve transition' },
+      { value: 'smoothleft', label: 'Smooth Left', icon: '⬅️', description: 'Smooth slide to left' },
+      { value: 'smoothright', label: 'Smooth Right', icon: '➡️', description: 'Smooth slide to right' },
+      { value: 'smoothup', label: 'Smooth Up', icon: '⬆️', description: 'Smooth slide up' },
+      { value: 'smoothdown', label: 'Smooth Down', icon: '⬇️', description: 'Smooth slide down' }
+    ];
 
-          {/* FPS */}
-          <div>
-            <label className="block text-sm font-medium text-gray-400 mb-2">
-              FPS
-            </label>
-            <select
-              value={videoSettings.fps}
-              onChange={(e) => setVideoSettings(prev => ({
-                ...prev,
-                fps: Number(e.target.value)
-              }))}
-              className="w-full bg-gray-700 text-white rounded-lg p-2"
-            >
-              <option value="24">24 FPS</option>
-              <option value="30">30 FPS</option>
-              <option value="60">60 FPS</option>
-            </select>
-          </div>
+    const currentTransition = availableTransitions.find(t => t.value === transition.type);
 
-          {/* Preset */}
-          <div>
-            <label className="block text-sm font-medium text-gray-400 mb-2">
-              Preset
-            </label>
-            <select
-              value={videoSettings.preset}
-              onChange={(e) => setVideoSettings(prev => ({
-                ...prev,
-                preset: e.target.value
-              }))}
-              className="w-full bg-gray-700 text-white rounded-lg p-2"
-            >
-              <option value="ultrafast">Ultrafast (Nhanh nhất)</option>
-              <option value="superfast">Superfast</option>
-              <option value="veryfast">Veryfast</option>
-              <option value="faster">Faster</option>
-              <option value="fast">Fast</option>
-              <option value="medium">Medium (Cân bằng)</option>
-              <option value="slow">Slow</option>
-              <option value="slower">Slower</option>
-              <option value="veryslow">Veryslow (Chất lượng cao nhất)</option>
-            </select>
-          </div>
-
-          {/* CRF */}
-          <div>
-            <label className="block text-sm font-medium text-gray-400 mb-2">
-              CRF (0-51, càng thấp chất lượng càng cao)
-            </label>
-            <input
-              type="range"
-              min="0"
-              max="51"
-              value={videoSettings.crf}
-              onChange={(e) => setVideoSettings(prev => ({
-                ...prev,
-                crf: Number(e.target.value)
-              }))}
-              className="w-full"
-            />
-            <span className="text-white">{videoSettings.crf}</span>
-          </div>
-
-          {/* Effects */}
-          <div className="col-span-2">
-            <h5 className="text-white font-medium mb-2">Hiệu ứng</h5>
-            <div className="space-y-2">
-              <label className="flex items-center space-x-2">
-                <input
-                  type="checkbox"
-                  checked={videoSettings.zoomEffect}
-                  onChange={(e) => setVideoSettings(prev => ({
-                    ...prev,
-                    zoomEffect: e.target.checked
-                  }))}
-                  className="form-checkbox"
-                />
-                <span className="text-white">Hiệu ứng zoom</span>
-              </label>
-              
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-400 mb-2">
-                    Fade In (giây)
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    max="5"
-                    step="0.1"
-                    value={videoSettings.fadeIn}
-                    onChange={(e) => setVideoSettings(prev => ({
-                      ...prev,
-                      fadeIn: Number(e.target.value)
-                    }))}
-                    className="w-full bg-gray-700 text-white rounded-lg p-2"
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-400 mb-2">
-                    Fade Out (giây)
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    max="5"
-                    step="0.1"
-                    value={videoSettings.fadeOut}
-                    onChange={(e) => setVideoSettings(prev => ({
-                      ...prev,
-                      fadeOut: Number(e.target.value)
-                    }))}
-                    className="w-full bg-gray-700 text-white rounded-lg p-2"
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Advanced Settings */}
-        <div className="mt-6">
-          <h5 className="text-white font-medium mb-4">Cài đặt nâng cao</h5>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Color Adjustments */}
-            <div className="space-y-4">
-              <h6 className="text-gray-400 font-medium">Điều chỉnh màu sắc</h6>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-400 mb-2">
-                  Độ sáng (-1 đến 1)
-                </label>
-                <input
-                  type="range"
-                  min="-1"
-                  max="1"
-                  step="0.1"
-                  value={videoSettings.brightness}
-                  onChange={(e) => setVideoSettings(prev => ({
-                    ...prev,
-                    brightness: Number(e.target.value)
-                  }))}
-                  className="w-full"
-                />
-                <span className="text-white">{videoSettings.brightness}</span>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-400 mb-2">
-                  Độ tương phản (0 đến 2)
-                </label>
-                <input
-                  type="range"
-                  min="0"
-                  max="2"
-                  step="0.1"
-                  value={videoSettings.contrast}
-                  onChange={(e) => setVideoSettings(prev => ({
-                    ...prev,
-                    contrast: Number(e.target.value)
-                  }))}
-                  className="w-full"
-                />
-                <span className="text-white">{videoSettings.contrast}</span>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-400 mb-2">
-                  Độ bão hòa (0 đến 2)
-                </label>
-                <input
-                  type="range"
-                  min="0"
-                  max="2"
-                  step="0.1"
-                  value={videoSettings.saturation}
-                  onChange={(e) => setVideoSettings(prev => ({
-                    ...prev,
-                    saturation: Number(e.target.value)
-                  }))}
-                  className="w-full"
-                />
-                <span className="text-white">{videoSettings.saturation}</span>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-400 mb-2">
-                  Màu sắc (-180 đến 180)
-                </label>
-                <input
-                  type="range"
-                  min="-180"
-                  max="180"
-                  value={videoSettings.hue}
-                  onChange={(e) => setVideoSettings(prev => ({
-                    ...prev,
-                    hue: Number(e.target.value)
-                  }))}
-                  className="w-full"
-                />
-                <span className="text-white">{videoSettings.hue}</span>
-              </div>
-            </div>
-
-            {/* Effects */}
-            <div className="space-y-4">
-              <h6 className="text-gray-400 font-medium">Hiệu ứng</h6>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-400 mb-2">
-                  Độ mờ (0 đến 10)
-                </label>
-                <input
-                  type="range"
-                  min="0"
-                  max="10"
-                  step="0.1"
-                  value={videoSettings.blur}
-                  onChange={(e) => setVideoSettings(prev => ({
-                    ...prev,
-                    blur: Number(e.target.value)
-                  }))}
-                  className="w-full"
-                />
-                <span className="text-white">{videoSettings.blur}</span>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-400 mb-2">
-                  Chuyển cảnh
-                </label>
-                <select
-                  value={videoSettings.transition}
-                  onChange={(e) => setVideoSettings(prev => ({
-                    ...prev,
-                    transition: e.target.value
-                  }))}
-                  className="w-full bg-gray-700 text-white rounded-lg p-2"
-                >
-                  <option value="none">Không có</option>
-                  <option value="fade">Fade</option>
-                  <option value="wipe">Wipe</option>
-                  <option value="slide">Slide</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-400 mb-2">
-                  Thời gian chuyển cảnh (giây)
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  max="5"
-                  step="0.1"
-                  value={videoSettings.transitionDuration}
-                  onChange={(e) => setVideoSettings(prev => ({
-                    ...prev,
-                    transitionDuration: Number(e.target.value)
-                  }))}
-                  className="w-full bg-gray-700 text-white rounded-lg p-2"
-                />
-              </div>
-            </div>
-
-            {/* Text Overlay */}
-            <div className="space-y-4">
-              <h6 className="text-gray-400 font-medium">Text Overlay</h6>
-              
-              <label className="flex items-center space-x-2">
-                <input
-                  type="checkbox"
-                  checked={videoSettings.textOverlay}
-                  onChange={(e) => setVideoSettings(prev => ({
-                    ...prev,
-                    textOverlay: e.target.checked
-                  }))}
-                  className="form-checkbox"
-                />
-                <span className="text-white">Hiển thị text</span>
-              </label>
-
-              {videoSettings.textOverlay && (
-                <>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-400 mb-2">
-                      Vị trí text
-                    </label>
-                    <select
-                      value={videoSettings.textPosition}
-                      onChange={(e) => setVideoSettings(prev => ({
-                        ...prev,
-                        textPosition: e.target.value
-                      }))}
-                      className="w-full bg-gray-700 text-white rounded-lg p-2"
-                    >
-                      <option value="top">Trên</option>
-                      <option value="center">Giữa</option>
-                      <option value="bottom">Dưới</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-400 mb-2">
-                      Màu text
-                    </label>
-                    <input
-                      type="color"
-                      value={videoSettings.textColor}
-                      onChange={(e) => setVideoSettings(prev => ({
-                        ...prev,
-                        textColor: e.target.value
-                      }))}
-                      className="w-full h-10"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-400 mb-2">
-                      Kích thước text
-                    </label>
-                    <input
-                      type="number"
-                      min="12"
-                      max="72"
-                      value={videoSettings.textSize}
-                      onChange={(e) => setVideoSettings(prev => ({
-                        ...prev,
-                        textSize: Number(e.target.value)
-                      }))}
-                      className="w-full bg-gray-700 text-white rounded-lg p-2"
-                    />
-                  </div>
-                </>
-              )}
-            </div>
-
-            {/* Watermark */}
-            <div className="space-y-4">
-              <h6 className="text-gray-400 font-medium">Watermark</h6>
-              
-              <label className="flex items-center space-x-2">
-                <input
-                  type="checkbox"
-                  checked={videoSettings.watermark}
-                  onChange={(e) => setVideoSettings(prev => ({
-                    ...prev,
-                    watermark: e.target.checked
-                  }))}
-                  className="form-checkbox"
-                />
-                <span className="text-white">Hiển thị watermark</span>
-              </label>
-
-              {videoSettings.watermark && (
-                <>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-400 mb-2">
-                      Vị trí watermark
-                    </label>
-                    <select
-                      value={videoSettings.watermarkPosition}
-                      onChange={(e) => setVideoSettings(prev => ({
-                        ...prev,
-                        watermarkPosition: e.target.value
-                      }))}
-                      className="w-full bg-gray-700 text-white rounded-lg p-2"
-                    >
-                      <option value="top-left">Góc trên trái</option>
-                      <option value="top-right">Góc trên phải</option>
-                      <option value="bottom-left">Góc dưới trái</option>
-                      <option value="bottom-right">Góc dưới phải</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-400 mb-2">
-                      Độ trong suốt
-                    </label>
-                    <input
-                      type="range"
-                      min="0"
-                      max="1"
-                      step="0.1"
-                      value={videoSettings.watermarkOpacity}
-                      onChange={(e) => setVideoSettings(prev => ({
-                        ...prev,
-                        watermarkOpacity: Number(e.target.value)
-                      }))}
-                      className="w-full"
-                    />
-                    <span className="text-white">{videoSettings.watermarkOpacity}</span>
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-      {/* Export button */}
-      {/* <div className="flex justify-end mb-4">
-        <button
-          onClick={generateAndExportScript}
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-        >
-          Xuất Script FFmpeg
-        </button>
-      </div> */}
-     
-      <div className="grid grid-cols-2 gap-8">
-        {/* Scene List */}
-        <div className="space-y-4">
-          <h3 className="text-white font-medium mb-4">Danh sách Scene</h3>
-          <SceneList />
-        </div>
-
-        {/* Scene Editor */}
-        <div className="space-y-4">
-          <h3 className="text-white font-medium mb-4">Chỉnh sửa Scene</h3>
-          {selectedScene ? (
-            <SceneEditor />
-          ) : (
-            <div className="flex items-center justify-center h-full text-gray-400">
-              Chọn một scene để chỉnh sửa
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Sticker Modal */}
-      {showStickerModal && (
-        <div 
-          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-          }}
-        >
-          <div 
-            className="bg-gray-800 p-6 rounded-lg w-96"
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-            }}
-          >
-            <h3 className="text-white text-lg font-medium mb-4">Chọn Sticker</h3>
-            <div className="grid grid-cols-5 gap-4">
-              {availableStickers.map((sticker, index) => (
-                <button
-                  key={index}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    handleAddSticker(sticker);
-                  }}
-                  className="p-4 bg-gray-700 rounded-lg hover:bg-gray-600 text-2xl"
-                >
-                  {sticker.content}
-                </button>
-              ))}
-            </div>
-            <div className="mt-4 space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm text-gray-400 mb-2">Thời gian bắt đầu (s)</label>
-                  <input
-                    type="number"
-                    min="0"
-                    max={audioRefs.current[`voice_${selectedScene}`]?.duration || 5}
-                    step="0.1"
-                    value={stickerSettings.startTime}
-                    onChange={(e) => setStickerSettings(prev => ({ ...prev, startTime: parseFloat(e.target.value) }))}
-                    className="w-full bg-gray-700 text-white rounded p-2"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm text-gray-400 mb-2">Thời gian kết thúc (s)</label>
-                  <input
-                    type="number"
-                    min="0"
-                    max={audioRefs.current[`voice_${selectedScene}`]?.duration || 5}
-                    step="0.1"
-                    value={stickerSettings.endTime}
-                    onChange={(e) => setStickerSettings(prev => ({ ...prev, endTime: parseFloat(e.target.value) }))}
-                    className="w-full bg-gray-700 text-white rounded p-2"
-                  />
-                </div>
-              </div>
+    return (
+      <div className="flex items-center justify-center py-3">
+        <div className="bg-gray-800/70 rounded-lg border border-gray-600 p-3 w-full max-w-md transition-all duration-300 hover:border-gray-500">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center space-x-2">
+              <span className="text-xs text-gray-400 font-medium">Scene {fromScene} → {toScene}</span>
+              <span className={`px-2 py-1 text-xs rounded transition-colors ${
+                transition.type === 'none' 
+                  ? 'bg-gray-600 text-gray-300' 
+                  : 'bg-blue-600 text-white'
+              }`}>
+                {currentTransition?.icon} {currentTransition?.label}
+              </span>
             </div>
             <button
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                setShowStickerModal(false);
-              }}
-              className="mt-4 w-full p-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600"
+              onClick={() => setIsExpanded(!isExpanded)}
+              className="text-gray-400 hover:text-white transition-colors p-1 rounded hover:bg-gray-700"
             >
-              Đóng
+              {isExpanded ? '▼' : '▶'}
             </button>
           </div>
-        </div>
-      )}
 
-      {/* Text Modal */}
-      {showTextModal && (
-        <div 
-          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-          }}
-        >
-          <div 
-            className="bg-gray-800 p-6 rounded-lg w-96"
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-            }}
-          >
-            <h3 className="text-white text-lg font-medium mb-4">
-              {editingTextId ? 'Chỉnh sửa Text' : 'Thêm Text'}
-            </h3>
-            <div className="space-y-4">
+          <div className={`overflow-hidden transition-all duration-300 ${
+            isExpanded ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'
+          }`}>
+            <div className="space-y-3 pt-2 border-t border-gray-600">
+              {/* Transition Type */}
               <div>
-                <label className="block text-sm text-gray-400 mb-2">Nội dung</label>
-                <input
-                  type="text"
-                  value={textInput}
-                  onChange={(e) => setTextInput(e.target.value)}
-                  className="w-full bg-gray-700 text-white rounded p-2"
-                  placeholder="Nhập nội dung..."
-                />
-              </div>
-              <div>
-                <label className="block text-sm text-gray-400 mb-2">Màu sắc</label>
-                <div className="flex items-center space-x-2">
-                  <input
-                    type="color"
-                    value={textStyle.color}
-                    onChange={(e) => {
-                      e.stopPropagation();
-                      setTextStyle(prev => ({ ...prev, color: e.target.value }));
-                    }}
-                    onClick={(e) => e.stopPropagation()}
-                    className="w-12 h-12 p-1 bg-gray-700 rounded cursor-pointer"
-                  />
-                  <span className="text-white">{textStyle.color}</span>
+                <label className="block text-xs text-gray-400 mb-2 font-medium">Transition type</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {availableTransitions.map(option => (
+                    <button
+                      key={option.value}
+                      onClick={() => onUpdate({ type: option.value })}
+                      className={`p-2 rounded text-xs transition-all duration-200 hover:scale-105 ${
+                        transition.type === option.value
+                          ? 'bg-blue-600 text-white shadow-lg'
+                          : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                      }`}
+                      title={option.description}
+                    >
+                      <div className="text-lg mb-1">{option.icon}</div>
+                      <div className="font-medium">{option.label}</div>
+                    </button>
+                  ))}
                 </div>
               </div>
-              <div>
-                <label className="block text-sm text-gray-400 mb-2">Kích thước</label>
-                <input
-                  type="range"
-                  min="12"
-                  max="72"
-                  value={textStyle.fontSize}
-                  onChange={(e) => setTextStyle(prev => ({ ...prev, fontSize: parseInt(e.target.value) }))}
-                  className="w-full"
-                />
-                <span className="text-white">{textStyle.fontSize}px</span>
-              </div>
-              <div>
-                <label className="block text-sm text-gray-400 mb-2">Font chữ</label>
-                <select
-                  value={textStyle.fontFamily}
-                  onChange={(e) => setTextStyle(prev => ({ ...prev, fontFamily: e.target.value }))}
-                  className="w-full bg-gray-700 text-white rounded p-2"
-                >
-                  <option value="Arial">Arial</option>
-                  <option value="Times New Roman">Times New Roman</option>
-                  <option value="Verdana">Verdana</option>
-                  <option value="Helvetica">Helvetica</option>
-                </select>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm text-gray-400 mb-2">Thời gian bắt đầu (s)</label>
-                  <input
-                    type="number"
-                    min="0"
-                    max={audioRefs.current[`voice_${selectedScene}`]?.duration || 5}
-                    step="0.1"
-                    value={textStyle.startTime}
-                    onChange={(e) => setTextStyle(prev => ({ ...prev, startTime: parseFloat(e.target.value) }))}
-                    className="w-full bg-gray-700 text-white rounded p-2"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm text-gray-400 mb-2">Thời gian kết thúc (s)</label>
-                  <input
-                    type="number"
-                    min="0"
-                    max={audioRefs.current[`voice_${selectedScene}`]?.duration || 5}
-                    step="0.1"
-                    value={textStyle.endTime}
-                    onChange={(e) => setTextStyle(prev => ({ ...prev, endTime: parseFloat(e.target.value) }))}
-                    className="w-full bg-gray-700 text-white rounded p-2"
-                  />
-                </div>
-              </div>
-            </div>
-            <div className="flex space-x-2 mt-4">
-              <button
-                onClick={handleAddText}
-                className="flex-1 p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-              >
-                {editingTextId ? 'Cập nhật' : 'Thêm'}
-              </button>
-              <button
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  setShowTextModal(false);
-                  setEditingTextId(null);
-                  setTextInput('');
-                }}
-                className="flex-1 p-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600"
-              >
-                Đóng
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
-      {/* Image Modal */}
-      {showImageModal && (
-        <div 
-          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
-        
-        >
-          <div 
-            className="bg-gray-800 p-6 rounded-lg w-96"
-            
-          >
-            <h3 className="text-white text-lg font-medium mb-4">Thêm Ảnh Overlay</h3>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm text-gray-400 mb-2">Chọn ảnh</label>
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={handleImageUpload}
-                  className="w-full bg-gray-700 text-white rounded p-2"
-                />
-              </div>
-              
-              {selectedImage && (
-                <>
-                  <div>
-                    <label className="block text-sm text-gray-400 mb-2">Scale</label>
+              {/* Duration */}
+              {transition.type !== 'none' && (
+                <div>
+                  <label className="block text-xs text-gray-400 mb-2 font-medium">
+                    Duration ({transition.duration}s)
+                  </label>
+                  <div className="flex items-center space-x-2">
                     <input
                       type="range"
                       min="0.1"
-                      max="2"
+                      max="3"
                       step="0.1"
-                      value={imageOverlaySettings.scale}
-                      onChange={(e) => setImageOverlaySettings(prev => ({
-                        ...prev,
-                        scale: parseFloat(e.target.value)
-                      }))}
-                      className="w-full"
+                      value={transition.duration}
+                      onChange={(e) => onUpdate({ duration: Number(e.target.value) })}
+                      className="flex-1"
                     />
-                    <span className="text-white">{imageOverlaySettings.scale}</span>
+                    <span className="text-xs text-gray-300 min-w-[2rem] text-center font-medium">
+                      {transition.duration}
+                    </span>
                   </div>
-                  
-                  <div>
-                    <label className="block text-sm text-gray-400 mb-2">Rotation</label>
-                    <input
-                      type="range"
-                      min="-180"
-                      max="180"
-                      value={imageOverlaySettings.rotation}
-                      onChange={(e) => setImageOverlaySettings(prev => ({
-                        ...prev,
-                        rotation: parseInt(e.target.value)
-                      }))}
-                      className="w-full"
-                    />
-                    <span className="text-white">{imageOverlaySettings.rotation}°</span>
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm text-gray-400 mb-2">Opacity</label>
-                    <input
-                      type="range"
-                      min="0"
-                      max="1"
-                      step="0.1"
-                      value={imageOverlaySettings.opacity}
-                      onChange={(e) => setImageOverlaySettings(prev => ({
-                        ...prev,
-                        opacity: parseFloat(e.target.value)
-                      }))}
-                      className="w-full"
-                    />
-                    <span className="text-white">{imageOverlaySettings.opacity}</span>
-                  </div>
-                  
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm text-gray-400 mb-2">Thời gian bắt đầu (s)</label>
-                      <input
-                        type="number"
-                        min="0"
-                        max={audioRefs.current[`voice_${selectedScene}`]?.duration || 5}
-                        step="0.1"
-                        value={imageOverlaySettings.startTime}
-                        onChange={(e) => setImageOverlaySettings(prev => ({
-                          ...prev,
-                          startTime: parseFloat(e.target.value)
-                        }))}
-                        className="w-full bg-gray-700 text-white rounded p-2"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm text-gray-400 mb-2">Thời gian kết thúc (s)</label>
-                      <input
-                        type="number"
-                        min="0"
-                        max={audioRefs.current[`voice_${selectedScene}`]?.duration || 5}
-                        step="0.1"
-                        value={imageOverlaySettings.endTime}
-                        onChange={(e) => setImageOverlaySettings(prev => ({
-                          ...prev,
-                          endTime: parseFloat(e.target.value)
-                        }))}
-                        className="w-full bg-gray-700 text-white rounded p-2"
-                      />
-                    </div>
-                  </div>
-                </>
+                </div>
               )}
-            </div>
-            <div className="flex space-x-2 mt-4">
-              <button
-                onClick={handleAddImageOverlay}
-                disabled={!selectedImage}
-                className="flex-1 p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
-              >
-                Thêm
-              </button>
-              <button
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  setShowImageModal(false);
-                  setSelectedImage(null);
-                }}
-                className="flex-1 p-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600"
-              >
-                Đóng
-              </button>
+
+              {/* Preview Info */}
+              {transition.type !== 'none' && (
+                <div className="bg-gray-900/50 p-3 rounded text-xs text-gray-300 border border-gray-700">
+                  <div className="flex items-center space-x-2 mb-2">
+                    <span className="text-blue-400">ℹ️</span>
+                    <span className="font-medium text-gray-200">Transition information</span>
+                  </div>
+                  <p>• Transition will occur at the end of Scene {fromScene}</p>
+                  <p>• Transition time: {transition.duration} seconds</p>
+                  <p>• Effect: {currentTransition?.label}</p>
+                  <p>• Description: {currentTransition?.description}</p>
+                </div>
+              )}
             </div>
           </div>
         </div>
-      )}
+      </div>
+    );
+  };
 
-      {/* Image Overlay Controls Modal */}
-      {showImageOverlayControls && editingImageOverlay && (
-        <div 
-          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-          }}
-        >
-          <div 
-            className="bg-gray-800 p-6 rounded-lg w-96"
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-            }}
-          >
-            <h3 className="text-white text-lg font-medium mb-4">Chỉnh sửa Image Overlay</h3>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm text-gray-400 mb-2">Scale</label>
-                <input
-                  type="range"
-                  min="0.1"
-                  max="2"
-                  step="0.1"
-                  value={editingImageOverlay.scale}
-                  onChange={(e) => handleUpdateImageOverlay({
-                    scale: parseFloat(e.target.value)
-                  })}
-                  className="w-full"
-                />
-                <span className="text-white">{editingImageOverlay.scale}</span>
+  return (
+    <div className="space-y-6">
+      <div className="bg-gray-800/50 p-4 rounded-lg space-y-4 timeline-component">
+       {/* Video Settings - Tối ưu hóa giao diện */}
+       <div className="bg-gray-800/50 p-3 rounded-lg border border-gray-600">
+        <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-purple-500/5 pointer-events-none"></div>
+        <div className="relative p-6">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center space-x-3">
+              <div className="p-2 rounded-xl bg-gradient-to-br from-blue-500/20 to-purple-500/20 border border-blue-400/20">
+                <svg className="w-6 h-6 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4" />
+                </svg>
               </div>
-              
-              <div>
-                <label className="block text-sm text-gray-400 mb-2">Rotation</label>
-                <input
-                  type="range"
-                  min="-180"
-                  max="180"
-                  value={editingImageOverlay.rotation}
-                  onChange={(e) => handleUpdateImageOverlay({
-                    rotation: parseInt(e.target.value)
-                  })}
-                  className="w-full"
-                />
-                <span className="text-white">{editingImageOverlay.rotation}°</span>
-              </div>
-              
-              <div>
-                <label className="block text-sm text-gray-400 mb-2">Opacity</label>
+              <h4 className="text-xl font-semibold text-white">Video Settings</h4>
+            </div>
+            
+          </div>
+
+          {/* Basic Settings */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            {/* Resolution */}
+            <div className="space-y-2">
+              <label className="block text-sm font-medium text-slate-400">
+                Resolution
+              </label>
+              <select
+                value={videoSettings.resolution}
+                onChange={(e) => setVideoSettings(prev => ({
+                  ...prev,
+                  resolution: e.target.value
+                }))}
+                className="w-full px-3 py-2 bg-slate-700/50 border border-slate-600/30 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 backdrop-blur-sm"
+              >
+                <option value="1920x1080">1080p (Full HD)</option>
+                <option value="1280x720">720p (HD)</option>
+                <option value="854x480">480p (SD)</option>
+              </select>
+            </div>
+
+            {/* FPS */}
+            <div className="space-y-2">
+              <label className="block text-sm font-medium text-slate-400">
+                Frame Rate
+              </label>
+              <select
+                value={videoSettings.fps}
+                onChange={(e) => setVideoSettings(prev => ({
+                  ...prev,
+                  fps: Number(e.target.value)
+                }))}
+                className="w-full px-3 py-2 bg-slate-700/50 border border-slate-600/30 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 backdrop-blur-sm"
+              >
+                <option value="24">24 FPS</option>
+                <option value="30">30 FPS</option>
+                <option value="60">60 FPS</option>
+              </select>
+            </div>
+
+            {/* Preset */}
+            <div className="space-y-2">
+              <label className="block text-sm font-medium text-slate-400">
+                Encoding Speed
+              </label>
+              <select
+                value={videoSettings.preset}
+                onChange={(e) => setVideoSettings(prev => ({
+                  ...prev,
+                  preset: e.target.value
+                }))}
+                className="w-full px-3 py-2 bg-slate-700/50 border border-slate-600/30 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 backdrop-blur-sm"
+              >
+                <option value="ultrafast">Fast (Lower Quality)</option>
+                <option value="medium">Balanced</option>
+                <option value="veryslow">Slow (Higher Quality)</option>
+              </select>
+            </div>
+
+            {/* CRF */}
+            <div className="space-y-2">
+              <label className="block text-sm font-medium text-slate-400">
+                Quality ({videoSettings.crf}))
+              </label>
+              <div className="flex items-center space-x-3">
                 <input
                   type="range"
                   min="0"
-                  max="1"
-                  step="0.1"
-                  value={editingImageOverlay.opacity}
-                  onChange={(e) => handleUpdateImageOverlay({
-                    opacity: parseFloat(e.target.value)
-                  })}
-                  className="w-full"
+                  max="51"
+                  value={videoSettings.crf}
+                  onChange={(e) => setVideoSettings(prev => ({
+                    ...prev,
+                    crf: Number(e.target.value)
+                  }))}
+                  className="flex-1 h-2 bg-slate-600/50 rounded-lg appearance-none cursor-pointer slider"
                 />
-                <span className="text-white">{editingImageOverlay.opacity}</span>
-              </div>
-              
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm text-gray-400 mb-2">Thời gian bắt đầu (s)</label>
-                  <input
-                    type="number"
-                    min="0"
-                    max={audioRefs.current[`voice_${selectedScene}`]?.duration || 5}
-                    step="0.1"
-                    value={editingImageOverlay.timing.start}
-                    onChange={(e) => handleUpdateImageOverlay({
-                      timing: {
-                        ...editingImageOverlay.timing,
-                        start: parseFloat(e.target.value)
-                      }
-                    })}
-                    className="w-full bg-gray-700 text-white rounded p-2"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm text-gray-400 mb-2">Thời gian kết thúc (s)</label>
-                  <input
-                    type="number"
-                    min="0"
-                    max={audioRefs.current[`voice_${selectedScene}`]?.duration || 5}
-                    step="0.1"
-                    value={editingImageOverlay.timing.end}
-                    onChange={(e) => handleUpdateImageOverlay({
-                      timing: {
-                        ...editingImageOverlay.timing,
-                        end: parseFloat(e.target.value)
-                      }
-                    })}
-                    className="w-full bg-gray-700 text-white rounded p-2"
-                  />
-                </div>
+                <span className="text-sm text-slate-300 min-w-[2rem] text-center font-mono bg-slate-700/50 px-2 py-1 rounded">
+                  {videoSettings.crf}
+                </span>
               </div>
             </div>
-            <div className="flex space-x-2 mt-4">
+          </div>
+
+          {/* Text Overlay Settings - Moved from advanced tab */}
+          <div className="bg-gray-700/50 rounded-lg p-4 mb-6">
+                  <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      checked={videoSettings.textOverlay}
+                      onChange={(e) => setVideoSettings(prev => ({
+                        ...prev,
+                        textOverlay: e.target.checked
+                      }))}
+                        className="form-checkbox w-4 h-4"
+                    />
+                      <span className="text-sm text-white font-medium">Text overlay</span>
+                  </div>
+                  </div>
+                  
+                  {videoSettings.textOverlay && (
+                    <div className="space-y-3">
+                      {/* Vị trí và màu sắc cơ bản */}
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-xs text-gray-400 mb-1">Vị trí</label>
+                      <select
+                        value={videoSettings.textPosition}
+                        onChange={(e) => setVideoSettings(prev => ({
+                          ...prev,
+                          textPosition: e.target.value
+                        }))}
+                            className="w-full bg-gray-700 text-white rounded p-1.5 text-xs border border-gray-600 focus:border-blue-500 focus:outline-none"
+                      >
+                        <option value="top">Top</option>
+                        <option value="center">Center</option>
+                        <option value="bottom">Bottom</option>
+                      </select>
+                        </div>
+                        <div>
+                          <label className="block text-xs text-gray-400 mb-1">Màu chữ</label>
+                      <input
+                        type="color"
+                        value={videoSettings.textColor}
+                        onChange={(e) => setVideoSettings(prev => ({
+                          ...prev,
+                          textColor: e.target.value
+                        }))}
+                            className="w-full h-8 rounded cursor-pointer border border-gray-600"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Kích thước */}
+                      <div>
+                        <label className="block text-xs text-gray-400 mb-1">Kích thước ({videoSettings.textSize}px)</label>
+                        <input
+                          type="range"
+                          min="12"
+                          max="48"
+                          value={videoSettings.textSize}
+                          onChange={(e) => setVideoSettings(prev => ({
+                            ...prev,
+                            textSize: Number(e.target.value)
+                          }))}
+                          className="w-full"
+                        />
+                      </div>
+
+                      {/* Background cho text */}
+                      <div className="border-t border-gray-600 pt-2">
+                        <div className="flex items-center justify-between mb-2">
+                          <label className="text-xs text-gray-400">Background</label>
+                          <input
+                            type="checkbox"
+                            checked={videoSettings.textBackground}
+                            onChange={(e) => setVideoSettings(prev => ({
+                              ...prev,
+                              textBackground: e.target.checked
+                            }))}
+                            className="form-checkbox w-3 h-3"
+                          />
+                        </div>
+                        {videoSettings.textBackground && (
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <label className="block text-xs text-gray-500 mb-1">Màu</label>
+                              <input
+                                type="color"
+                                value={videoSettings.textBackgroundColor}
+                                onChange={(e) => setVideoSettings(prev => ({
+                                  ...prev,
+                                  textBackgroundColor: e.target.value
+                                }))}
+                                className="w-full h-6 rounded cursor-pointer"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs text-gray-500 mb-1">Độ trong suốt</label>
+                              <input
+                                type="range"
+                                min="0"
+                                max="1"
+                                step="0.1"
+                                value={videoSettings.textBackgroundOpacity}
+                                onChange={(e) => setVideoSettings(prev => ({
+                                  ...prev,
+                                  textBackgroundOpacity: Number(e.target.value)
+                                }))}
+                                className="w-full"
+                              />
+                              <span className="text-xs text-gray-400">{videoSettings.textBackgroundOpacity}</span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Outline cho text */}
+                      <div className="border-t border-gray-600 pt-2">
+                        <div className="flex items-center justify-between mb-2">
+                          <label className="text-xs text-gray-400">Viền text</label>
+                          <input
+                            type="checkbox"
+                            checked={videoSettings.textOutline}
+                            onChange={(e) => setVideoSettings(prev => ({
+                              ...prev,
+                              textOutline: e.target.checked
+                            }))}
+                            className="form-checkbox w-3 h-3"
+                          />
+                        </div>
+                        {videoSettings.textOutline && (
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <label className="block text-xs text-gray-500 mb-1">Màu viền</label>
+                              <input
+                                type="color"
+                                value={videoSettings.textOutlineColor}
+                                onChange={(e) => setVideoSettings(prev => ({
+                                  ...prev,
+                                  textOutlineColor: e.target.value
+                                }))}
+                                className="w-full h-6 rounded cursor-pointer"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs text-gray-500 mb-1">Độ dày</label>
+                              <input
+                                type="range"
+                                min="1"
+                                max="5"
+                                value={videoSettings.textOutlineWidth}
+                                onChange={(e) => setVideoSettings(prev => ({
+                                  ...prev,
+                                  textOutlineWidth: Number(e.target.value)
+                                }))}
+                                className="w-full"
+                              />
+                              <span className="text-xs text-gray-400">{videoSettings.textOutlineWidth}px</span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Shadow cho text */}
+                      <div className="border-t border-gray-600 pt-2">
+                        <div className="flex items-center justify-between mb-2">
+                          <label className="text-xs text-gray-400">Đổ bóng</label>
+                          <input
+                            type="checkbox"
+                            checked={videoSettings.textShadow}
+                            onChange={(e) => setVideoSettings(prev => ({
+                              ...prev,
+                              textShadow: e.target.checked
+                            }))}
+                            className="form-checkbox w-3 h-3"
+                          />
+                        </div>
+                        {videoSettings.textShadow && (
+                          <div className="space-y-2">
+                            <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                <label className="block text-xs text-gray-500 mb-1">Màu bóng</label>
+                                <input
+                                  type="color"
+                                  value={videoSettings.textShadowColor}
+                                  onChange={(e) => setVideoSettings(prev => ({
+                                    ...prev,
+                                    textShadowColor: e.target.value
+                                  }))}
+                                  className="w-full h-6 rounded cursor-pointer"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-xs text-gray-500 mb-1">Độ trong suốt</label>
+                                <input
+                                  type="range"
+                                  min="0"
+                                  max="1"
+                                  step="0.1"
+                                  value={videoSettings.textShadowOpacity}
+                                  onChange={(e) => setVideoSettings(prev => ({
+                                    ...prev,
+                                    textShadowOpacity: Number(e.target.value)
+                                  }))}
+                                  className="w-full"
+                                />
+                                <span className="text-xs text-gray-400">{videoSettings.textShadowOpacity}</span>
+                              </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                <label className="block text-xs text-gray-500 mb-1">Vị trí X</label>
+                                <input
+                                  type="range"
+                                  min="-5"
+                                  max="5"
+                                  value={videoSettings.textShadowX}
+                                  onChange={(e) => setVideoSettings(prev => ({
+                                    ...prev,
+                                    textShadowX: Number(e.target.value)
+                                  }))}
+                                  className="w-full"
+                                />
+                                <span className="text-xs text-gray-400">{videoSettings.textShadowX}px</span>
+                              </div>
+                              <div>
+                                <label className="block text-xs text-gray-500 mb-1">Vị trí Y</label>
+                                <input
+                                  type="range"
+                                  min="-5"
+                                  max="5"
+                                  value={videoSettings.textShadowY}
+                                  onChange={(e) => setVideoSettings(prev => ({
+                                    ...prev,
+                                    textShadowY: Number(e.target.value)
+                                  }))}
+                                  className="w-full"
+                                />
+                                <span className="text-xs text-gray-400">{videoSettings.textShadowY}px</span>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+          {/* Effects Settings - Moved from advanced tab */}
+          <div className="bg-gray-700/50 rounded-lg p-4 mb-6">
+          <button
+              onClick={() => setVideoSettings(prev => ({
+                ...prev,
+                showEffects: !prev.showEffects
+              }))}
+              className="w-full flex items-center justify-between text-left"
+            >
+              <div className="flex items-center space-x-2">
+                <span className="text-lg">🎬</span>
+                <span className="text-sm text-white font-medium">Video Effects</span>
+        </div> 
+              <svg className={`w-4 h-4 text-gray-400 transition-transform duration-300 ${videoSettings.showEffects ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+            
+            {videoSettings.showEffects && (
+              <div className="space-y-3 mt-3 pt-3 border-t border-gray-600">
+                {/* Individual Scene Transitions - Đã di chuyển vào giữa các scene */}
+                <div className="bg-gray-800/50 rounded-lg p-4 text-center">
+                  <div className="text-blue-400 text-lg mb-2">🎬</div>
+                  <h4 className="text-sm text-white font-medium mb-2">Individual Scene Transitions</h4>
+                  <p className="text-xs text-gray-400 mb-3">
+                    Transitions have been moved between scenes for easier use.
+                  </p>
+                  <div className="bg-gray-900/50 p-3 rounded text-xs text-gray-300">
+                    <p>• Click the ▶ arrow between scenes to open transition settings</p>
+                    <p>• Select transition type and duration for each scene pair</p>
+                    <p>• Each scene pair can have a different transition</p>
+        </div>
+      </div>
+
+                {/* Video Effects */}
+                <div className="bg-gray-800/50 rounded-lg p-3">
+                  <h4 className="text-sm text-white font-medium mb-3">🎥 Video Effects</h4>
+                  <div className="grid grid-cols-2 gap-3">
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                        checked={videoSettings.zoomEffect}
+                        onChange={(e) => setVideoSettings(prev => ({
+                      ...prev, 
+                          zoomEffect: e.target.checked
+                    }))}
+                        className="form-checkbox w-3 h-3"
+                  />
+                      <label className="text-xs text-gray-300">Zoom effect</label>
+                </div>
+                    
+                    <div>
+                      <label className="block text-xs text-gray-400 mb-1">Fade In ({videoSettings.fadeIn}s)</label>
+                      <input
+                        type="range"
+                        min="0"
+                        max="5"
+                        step="0.1"
+                        value={videoSettings.fadeIn}
+                        onChange={(e) => setVideoSettings(prev => ({
+                          ...prev, 
+                          fadeIn: Number(e.target.value)
+                        }))}
+                        className="w-full"
+                      />
+              </div>
+
+                    <div>
+                      <label className="block text-xs text-gray-400 mb-1">Fade Out ({videoSettings.fadeOut}s)</label>
+                      <input
+                        type="range"
+                        min="0"
+                        max="5"
+                        step="0.1"
+                        value={videoSettings.fadeOut}
+                        onChange={(e) => setVideoSettings(prev => ({
+                          ...prev, 
+                          fadeOut: Number(e.target.value)
+                        }))}
+                        className="w-full"
+                      />
+              </div>
+
+                      <div>
+                      <label className="block text-xs text-gray-400 mb-1">Blur ({videoSettings.blur})</label>
+                        <input
+                          type="range"
+                          min="0"
+                        max="10"
+                          step="0.1"
+                        value={videoSettings.blur}
+                        onChange={(e) => setVideoSettings(prev => ({
+                            ...prev, 
+                          blur: Number(e.target.value)
+                          }))}
+                          className="w-full"
+                        />
+                      </div>
+                    </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+          {/* Color Settings - Moved from advanced tab */}
+          <div className="bg-gray-700/50 rounded-lg p-4 mb-6">
               <button
-                onClick={() => {
-                  setShowImageOverlayControls(false);
-                  setEditingImageOverlay(null);
-                }}
-                className="flex-1 p-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600"
-              >
-                Đóng
-              </button>
+              onClick={() => setVideoSettings(prev => ({
+                ...prev,
+                showColor: !prev.showColor
+              }))}
+              className="w-full flex items-center justify-between text-left"
+            >
+              <div className="flex items-center space-x-2">
+                <span className="text-lg">🎨</span>
+                <span className="text-sm text-white font-medium">Color Adjustments</span>
+            </div>
+              <svg className={`w-4 h-4 text-gray-400 transition-transform duration-300 ${videoSettings.showColor ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+            
+            {videoSettings.showColor && (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-3 pt-3 border-t border-gray-600">
+              <div>
+                  <label className="block text-xs font-medium text-gray-400 mb-1">
+                    Brightness ({videoSettings.brightness})
+                  </label>
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="range"
+                      min="-1"
+                      max="1"
+                      step="0.1"
+                      value={videoSettings.brightness}
+                      onChange={(e) => setVideoSettings(prev => ({
+                        ...prev,
+                        brightness: Number(e.target.value)
+                      }))}
+                      className="flex-1"
+                    />
+                    <span className="text-xs text-gray-300 min-w-[2rem] text-center">
+                      {videoSettings.brightness}
+                    </span>
+                  </div>
+                  </div>
+                  
+                  <div>
+                  <label className="block text-xs font-medium text-gray-400 mb-1">
+                    Contrast ({videoSettings.contrast})
+                  </label>
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="range"
+                      min="0"
+                      max="2"
+                      step="0.1"
+                      value={videoSettings.contrast}
+                      onChange={(e) => setVideoSettings(prev => ({
+                        ...prev,
+                        contrast: Number(e.target.value)
+                      }))}
+                      className="flex-1"
+                    />
+                    <span className="text-xs text-gray-300 min-w-[2rem] text-center">
+                      {videoSettings.contrast}
+                    </span>
+                  </div>
+                  </div>
+                  
+                    <div>
+                  <label className="block text-xs font-medium text-gray-400 mb-1">
+                    Saturation ({videoSettings.saturation})
+                  </label>
+                  <div className="flex items-center space-x-2">
+                      <input
+                      type="range"
+                        min="0"
+                      max="2"
+                        step="0.1"
+                      value={videoSettings.saturation}
+                      onChange={(e) => setVideoSettings(prev => ({
+                          ...prev,
+                        saturation: Number(e.target.value)
+                        }))}
+                      className="flex-1"
+                      />
+                    <span className="text-xs text-gray-300 min-w-[2rem] text-center">
+                      {videoSettings.saturation}
+                    </span>
+                    </div>
+                </div>
+
+                    <div>
+                  <label className="block text-xs font-medium text-gray-400 mb-1">
+                    Hue ({videoSettings.hue})
+                  </label>
+                  <div className="flex items-center space-x-2">
+                      <input
+                      type="range"
+                      min="-180"
+                      max="180"
+                      value={videoSettings.hue}
+                      onChange={(e) => setVideoSettings(prev => ({
+                          ...prev,
+                        hue: Number(e.target.value)
+                      }))}
+                      className="flex-1"
+                    />
+                    <span className="text-xs text-gray-300 min-w-[3rem] text-center">
+                      {videoSettings.hue}°
+                    </span>
             </div>
           </div>
         </div>
       )}
+              </div>
+              
+          {/* Overlay Tab */}
+          {videoSettings.activeTab === 'overlay' && (
+            <div className="space-y-3">
+              {/* Text Overlay - Removed, moved to main video settings */}
+              
+              </div>
+          )}
+                </div>
+                </div>
+
+        {/* Timeline and Scene Controls */}
+        <div className="space-y-6">
+        {/* Export button 
+        <div className="flex justify-end mb-3">
+              <button
+            onClick={generateAndExportScript}
+            className="px-3 py-1.5 bg-blue-600 text-white rounded text-sm hover:bg-blue-700 transition-colors flex items-center space-x-1"
+          >
+            <span>📄</span>
+            <span>Xuất Script FFmpeg</span>
+              </button>
+            </div>
+        */}
+     
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Scene List */}
+        <div className="space-y-3">
+          <h3 className="text-white font-medium mb-3 text-sm"> Scene</h3>
+          <SceneList />
+          </div>
+
+        {/* Scene Editor */}
+        <div className="space-y-3">
+          <h3 className="text-white font-medium mb-3 text-sm">✏️ Scene Editor</h3>
+          {selectedScene ? (
+            <SceneEditor />
+          ) : (
+            <div className="flex items-center justify-center h-32 text-gray-400 text-sm bg-gray-800/30 rounded-lg">
+            <span>Choose a scene to edit</span>
+        </div>
+      )}
+        </div>
+      </div>
+      </div>
+      </div>
     </div>
   );
 });

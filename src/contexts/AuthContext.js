@@ -1,5 +1,5 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
-import { authAPI } from '../services/api';
+import { authAPI, userAPI } from '../services/api';
 
 const AuthContext = createContext(null);
 
@@ -7,50 +7,55 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  // Khi FE khởi động, gọi API lấy user info
   useEffect(() => {
-    // Kiểm tra token và lấy thông tin user khi component mount
-    const token = localStorage.getItem('token');
-    if (token) {
-      authAPI.getProfile()
-        .then(response => {
-          setUser(response.data);
-        })
-        .catch(() => {
-          localStorage.removeItem('token');
-        })
-        .finally(() => {
-          setLoading(false);
-        });
-    } else {
-      setLoading(false);
-    }
+    const fetchUser = async () => {
+      try {
+        const res = await userAPI.getProfile(); // hoặc getMe()
+        setUser(res.data);
+      } catch (error) {
+        setUser(null);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchUser();
   }, []);
 
   const login = async (credentials) => {
-    const response = await authAPI.login(credentials);
-    const { token, user } = response.data;
-    localStorage.setItem('token', token);
-    setUser(user);
-    return user;
+    await authAPI.login(credentials); // BE sẽ set cookie
+    console.log('login', credentials);
+    // Sau khi login, gọi lại API lấy user info
+    const res = await userAPI.getProfile();
+    setUser(res.data);
   };
 
-  const register = async (userData) => {
-    const response = await authAPI.register(userData);
-    const { token, user } = response.data;
-    localStorage.setItem('token', token);
-    setUser(user);
-    return user;
+  const loginWithToken = async (tokens) => {
+    // Lưu tokens vào localStorage tạm thời cho Google login
+    if (tokens.access_token) {
+      localStorage.setItem('token', tokens.access_token);
+    }
+    if (tokens.refresh_token) {
+      localStorage.setItem('refresh_token', tokens.refresh_token);
+    }
+    
+    // Sau khi login, gọi lại API lấy user info
+    const res = await userAPI.getProfile();
+    setUser(res.data);
+    return res.data;
   };
 
   const logout = async () => {
     await authAPI.logout();
-    localStorage.removeItem('token');
     setUser(null);
+    // Xóa tokens khỏi localStorage
+    localStorage.removeItem('token');
+    localStorage.removeItem('refresh_token');
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout }}>
-      {children}
+    <AuthContext.Provider value={{ user, loading, login, loginWithToken, logout, isAuthenticated: !!user }}>
+      {!loading && children}
     </AuthContext.Provider>
   );
 };

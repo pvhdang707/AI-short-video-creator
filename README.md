@@ -1,70 +1,206 @@
-# Getting Started with Create React App
+# AI Short Video Creator
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+An intelligent web application for creating short videos with AI-powered content generation, image processing, and advanced video editing capabilities.
 
-## Available Scripts
+## 🎯 Features
 
-In the project directory, you can run:
+### Core Functionality
+- **AI-Powered Content Generation**: Generate video scripts and scenes using AI
+- **Multiple Creation Workflows**: 
+  - V1: Basic video creation
+  - V2: Advanced timeline-based editor with overlay support
+- **Image Processing**: Apply filters, effects, and transformations to images
+- **Video Export**: Generate MP4 videos using FFmpeg in the browser
+- **Timeline Editor**: Professional timeline interface for precise video editing
 
-### `npm start`
+### Advanced Features
+- **Image Overlays**: Add and position images on video scenes
+- **Text Overlays**: Add customizable text with various fonts and styles
+- **Stickers & Effects**: Rich library of stickers and visual effects
+- **Scene Transitions**: Smooth transitions between video scenes
+- **Real-time Preview**: WYSIWYG editor with live preview
+- **Responsive Design**: Works on desktop and mobile devices
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+## 🚀 Getting Started
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+### Prerequisites
+- Node.js (version 14 or higher)
+- npm or yarn package manager
+- Modern web browser with SharedArrayBuffer support
 
-### `npm test`
+### Installation
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/your-username/AI-short-video-creator.git
+   cd AI-short-video-creator
+   ```
 
-### `npm run build`
+2. **Install dependencies**
+   ```bash
+   npm install
+   ```
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+3. **Start the development server**
+   ```bash
+   npm start
+   ```
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+4. **Open your browser**
+   Navigate to [http://localhost:3000](http://localhost:3000)
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+## 📁 Project Structure
 
-### `npm run eject`
+```
+src/
+├── components/           # Reusable UI components
+│   ├── ImageFilters/    # Image filter components
+│   ├── SceneEditor/     # Scene editing components
+│   └── VideoExport/     # Video export functionality
+├── pages/               # Main application pages
+│   ├── CreateVideo/     # Video creation workflows
+│   │   ├── V1/         # Basic creation workflow
+│   │   └── V2/         # Advanced timeline editor
+│   ├── ImageGenerate/   # Image generation features
+│   └── VideoList/       # Video management
+├── utils/               # Utility functions
+│   ├── ffmpeg/         # FFmpeg processing
+│   └── imageProcessing/ # Image manipulation
+└── styles/              # CSS and styling
+```
 
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
+## 🎬 How to Use
 
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+### Creating Your First Video
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
+1. **Choose Creation Method**
+   - Select "Create Video V1" for simple video creation
+   - Select "Create Video V2" for advanced timeline editing
 
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
+2. **Generate Content**
+   - Enter your video topic or theme
+   - Let AI generate scenes and script
+   - Review and edit the generated content
 
-## Learn More
+3. **Customize Scenes**
+   - Apply filters to images
+   - Add text overlays and stickers
+   - Adjust timing and transitions
+   - Position elements using drag-and-drop
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+4. **Export Video**
+   - Configure video settings (resolution, framerate)
+   - Generate and download your MP4 video
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+### Timeline Editor (V2)
 
-### Code Splitting
+The advanced timeline editor provides:
+- **Scene Management**: Add, remove, and reorder scenes
+- **Element Layering**: Multiple overlay layers with z-index control
+- **Timing Control**: Precise start/end times for all elements
+- **Live Preview**: Real-time preview of your video
+- **Professional Tools**: Industry-standard timeline interface
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
+## 🛠️ Available Scripts
 
-### Analyzing the Bundle Size
+### Development
+```bash
+npm start          # Run development server
+npm test           # Run test suite
+npm run build      # Build for production
+npm run eject      # Eject from Create React App (one-way operation)
+```
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
+### Additional Scripts
+```bash
+npm run lint       # Run ESLint
+npm run format     # Format code with Prettier
+npm run analyze    # Analyze bundle size
+```
 
-### Making a Progressive Web App
+## 🔧 Configuration
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
+### Video Settings
+- **Resolution**: 1080p, 720p, 480p
+- **Frame Rate**: 24fps, 30fps, 60fps
+- **Format**: MP4 (H.264)
+- **Audio**: AAC encoding
 
-### Advanced Configuration
+### Browser Requirements
+- Chrome 91+ (recommended)
+- Firefox 90+
+- Safari 14+
+- Edge 91+
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
+**Note**: SharedArrayBuffer support required for FFmpeg functionality
 
-### Deployment
+## 🤝 Contributing
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
 
-### `npm run build` fails to minify
+## 📝 Development Guidelines
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+### Code Style
+- Use ESLint and Prettier for consistent formatting
+- Follow React best practices and hooks patterns
+- Write descriptive commit messages
+- Add comments for complex functionality
+
+### Testing
+- Write unit tests for utility functions
+- Add integration tests for major features
+- Test across different browsers and devices
+
+## 🐛 Troubleshooting
+
+### Common Issues
+
+**FFmpeg not loading**
+- Ensure your browser supports SharedArrayBuffer
+- Check if running on HTTPS (required for some browsers)
+- Clear browser cache and reload
+
+**Video export fails**
+- Check browser console for errors
+- Verify all media files are loaded
+- Ensure sufficient browser memory
+
+**Performance issues**
+- Reduce video resolution for better performance
+- Close unnecessary browser tabs
+- Use Chrome for best performance
+
+## 📚 Technologies Used
+
+- **Frontend**: React 18, HTML5 Canvas, CSS3
+- **Video Processing**: FFmpeg.wasm
+- **Image Processing**: Custom JavaScript utilities
+- **State Management**: React Hooks, Context API
+- **UI Components**: Custom components with modern CSS
+- **Build Tool**: Create React App, Webpack
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 👥 Team
+
+- **Frontend Development**: React components and UI/UX
+- **Video Processing**: FFmpeg integration and optimization
+- **AI Integration**: Content generation and processing
+- **Design**: User interface and experience design
+
+## 🔮 Roadmap
+
+- [ ] Advanced AI voice generation
+- [ ] Real-time collaboration features
+- [ ] Cloud storage integration
+- [ ] Mobile app development
+- [ ] Advanced animation tools
+- [ ] Social media integration
+
+

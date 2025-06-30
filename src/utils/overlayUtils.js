@@ -5,6 +5,7 @@
 
 // Import các hàm cần thiết
 import { base64ToBlob } from './audioUtils';
+import { formatTextForVideo } from './textUtils';
 
 /**
  * Chuyển đổi tọa độ từ giao diện sang tọa độ tương đối cho FFmpeg
@@ -112,171 +113,122 @@ export const applyImageFilters = (imageFilters) => {
  * @param {Object} textConfig - Cấu hình văn bản
  * @returns {String} FFmpeg filter string
  */
-export const createAdvancedTextOverlay = (textConfig) => {
+export const createAdvancedTextOverlay = async (textConfig, outputLabel = '[v1]') => {
   try {
-    const { content, position, style, animation, dimensions, timing } = textConfig;
-    let { x, y, unit, absoluteX, absoluteY } = position;
+    const { text, position, style, timing, outputDimensions, previewDimensions } = textConfig;
     
-    // Get timing information if available
-    const startTime = timing?.start ?? 0;
-    const endTime = timing?.end;
-    
-    // Sử dụng tọa độ tương đối nếu có thông tin về kích thước
-    // Mặc định kích thước video output là 854x480 nếu không được chỉ định
-    const outputDimensions = { 
-      width: (dimensions?.output?.width || 854), 
-      height: (dimensions?.output?.height || 480) 
-    };
-    const previewDimensions = position.previewDimensions || dimensions?.preview;
-    
-    // Lấy thông tin về font size để tính toán điểm anchor cho text
-    const { fontSize = 24 } = style || {};
+    console.log(`[Text Overlay] Processing text: "${text}"`);
+    console.log(`[Text Overlay] Original position:`, position);
+    console.log(`[Text Overlay] Output dimensions:`, outputDimensions);
+    console.log(`[Text Overlay] Preview dimensions:`, previewDimensions);
     
     // Chuyển đổi tọa độ cho FFmpeg
     let ffmpegX, ffmpegY;
-      if (unit === 'percentage' || (typeof x === 'number' && x >= 0 && x <= 100 && typeof y === 'number' && y >= 0 && y <= 100)) {
+    
+    if (position.unit === 'percentage' || (typeof position.x === 'number' && position.x >= 0 && position.x <= 100 && typeof position.y === 'number' && position.y >= 0 && position.y <= 100)) {
       // Sử dụng tọa độ phần trăm để tạo tọa độ FFmpeg
-      console.log(`Sử dụng tọa độ phần trăm (${x}%, ${y}%) cho text overlay`);
+      console.log(`[Text Overlay] Sử dụng tọa độ phần trăm (${position.x}%, ${position.y}%)`);
       
       // Chuyển phần trăm thành hệ số (0-1)
-      const percentX = x / 100;
-      const percentY = y / 100;
+      const percentX = position.x / 100;
+      const percentY = position.y / 100;
       
-      // Sử dụng biểu thức w và h của FFmpeg
-      ffmpegX = `(w*${percentX.toFixed(4)})`;
-      ffmpegY = `(h*${percentY.toFixed(4)})`;
+      // Tính toán vị trí pixel tương ứng với output dimensions
+      const pixelX = Math.round(percentX * outputDimensions.width);
+      const pixelY = Math.round(percentY * outputDimensions.height);
       
-      // Thêm căn chỉnh trung tâm (center alignment) cho text
-      // Điều này giúp text xuất hiện ở trung tâm của vị trí được chọn
-      ffmpegX = `${ffmpegX}-(text_w/2)`;
-      ffmpegY = `${ffmpegY}-(text_h/2)`;
+      console.log(`[Text Overlay] Chuyển đổi sang pixel: (${pixelX}, ${pixelY})`);
       
-      // Debug info
-      console.log(`Tọa độ phần trăm: (${x}%, ${y}%) -> FFmpeg: x=${ffmpegX}, y=${ffmpegY}`);
-      
-    } else if (absoluteX !== undefined && absoluteY !== undefined) {
-      // Sử dụng tọa độ tuyệt đối nếu có sẵn
-      console.log(`Sử dụng tọa độ tuyệt đối (${absoluteX}, ${absoluteY}) cho text overlay`);
-      ffmpegX = `${absoluteX}-(text_w/2)`;
-      ffmpegY = `${absoluteY}-(text_h/2)`;
+      // Sử dụng tọa độ pixel cố định
+      ffmpegX = pixelX;
+      ffmpegY = pixelY;
     } else {
-      // Nếu có thông tin kích thước preview và output, chuyển đổi tọa độ
-      console.log('Chuyển đổi tọa độ từ pixel sang tương đối cho FFmpeg');
-      const convertedPosition = convertPositionToFFmpegCoordinates(
-        { x, y }, 
-        previewDimensions || { width: outputDimensions.width, height: outputDimensions.height },
-        outputDimensions
-      );
-      
-      ffmpegX = `${convertedPosition.x}-(text_w/2)`;
-      ffmpegY = `${convertedPosition.y}-(text_h/2)`;
-    }
-    
-    console.log(`Biểu thức FFmpeg cuối cùng cho vị trí: x=${ffmpegX}, y=${ffmpegY}`);
-    
-    const {
-      color = 'FFFFFF',
-      fontFamily = 'arial',
-      bold = false,
-      italic = false,
-      outline = false,
-      outlineColor = '000000',
-      outlineWidth = 2,
-      shadow = false,
-      shadowColor = '000000',
-      shadowX = 2,
-      shadowY = 2,
-      opacity = 1,
-      backgroundColor = null,
-      backgroundOpacity = 0.5
-    } = style || {};
-    
-    // Chuẩn bị nội dung
-    const escapedContent = content.replace(/'/g, "\\'").replace(/\\n/g, "\\n");
-    const hexColor = color.replace('#', '');
-    const hexOutlineColor = outlineColor.replace('#', '');
-    const hexShadowColor = shadowColor.replace('#', '');    // Xây dựng chuỗi text expression
-    let textExpression = `drawtext=text='${escapedContent}'`;
-      // Thêm thông tin vị trí, đã điều chỉnh theo điểm neo trung tâm
-    textExpression += `:x=${ffmpegX}:y=${ffmpegY}`;
-    
-    // Apply timing constraints if available
-    if (startTime !== undefined || endTime !== undefined) {
-      // Default: show from beginning to end of video if not specified
-      const start = startTime !== undefined ? startTime : 0;
-      const end = endTime !== undefined ? endTime : 9999; // Very large number to ensure it shows until the end
-      
-      // Enable text only between start and end time
-      textExpression += `:enable='between(t,${start},${end})'`;
-      console.log(`Applying timing constraints to text overlay: start=${start}, end=${end}`);
-    }// Thêm debug info vào nội dung text để xác minh vị trí
-    // Bật debug để hiện thông tin tọa độ trên text để dễ kiểm tra
-    const showDebugInfo = false; // Đặt thành false khi deploy
-    if (showDebugInfo) {
-        const debugText = `${escapedContent} (${x}%,${y}%)`;
-        textExpression = textExpression.replace(`text='${escapedContent}'`, `text='${debugText}'`);
-    }
-    
-    textExpression += `:fontsize=${fontSize}`;
-    // Always use arial.ttf which is loaded into FFmpeg's virtual filesystem
-    textExpression += `:fontfile=arial.ttf`;
-    
-    // Xử lý màu chữ và độ trong suốt
-    if (opacity !== 1) {
-      textExpression += `:fontcolor_expr=0x${hexColor}@${opacity}`;
-    } else {
-      textExpression += `:fontcolor=0x${hexColor}`;
-    }
-    
-    // Thêm background nếu được chỉ định
-    if (backgroundColor) {
-      const hexBgColor = backgroundColor.replace('#', '');
-      textExpression += `:box=1:boxcolor=0x${hexBgColor}@${backgroundOpacity}:boxborderw=5`;
-    }
-    
-    // Thêm viền
-    if (outline) {
-      textExpression += `:borderw=${outlineWidth}:bordercolor=0x${hexOutlineColor}`;
-    }
-    
-    // Thêm đổ bóng
-    if (shadow) {
-      textExpression += `:shadowx=${shadowX}:shadowy=${shadowY}:shadowcolor=0x${hexShadowColor}`;
-    }
-    
-    // Thêm hiệu ứng animation nếu có
-    if (animation) {
-      const { type, duration, delay, fadeIn, fadeOut } = animation;
-      
-      switch (type) {
-        case 'fade':
-          // Tạo fade in và fade out
-          if (fadeIn) {
-            textExpression += `:alpha='if(lt(t,${delay}),0,if(lt(t,${delay + fadeIn}),(t-${delay})/${fadeIn},1))'`;
-          }
-          if (fadeOut && duration) {
-            const fadeOutStart = duration - fadeOut;
-            textExpression += `:alpha='if(lt(t,${delay}),0,if(lt(t,${delay + fadeIn}),(t-${delay})/${fadeIn},if(lt(t,${fadeOutStart}),1,(${duration}-t)/${fadeOut})))'`;
-          }
-          break;
-          
-        case 'slide':
-          // Hiệu ứng slide từ trái hoặc phải
-          const direction = animation.direction || 'left';
-          const screenW = 'w'; // Chiều rộng màn hình
-          
-          if (direction === 'left') {
-            textExpression += `:x='if(lt(t,${delay}),${screenW},if(lt(t,${delay + fadeIn}),(t-${delay})/${fadeIn}*${screenW},${x}))'`;
-          } else { // right
-            textExpression += `:x='if(lt(t,${delay}),-tw,if(lt(t,${delay + fadeIn}),(t-${delay})/${fadeIn}*${x},${x}))'`;
-          }
-          break;
+      // Sử dụng tọa độ tuyệt đối nếu có
+      if (position.absoluteX !== undefined && position.absoluteY !== undefined) {
+        ffmpegX = position.absoluteX;
+        ffmpegY = position.absoluteY;
+        console.log(`[Text Overlay] Sử dụng tọa độ tuyệt đối: (${ffmpegX}, ${ffmpegY})`);
+      } else {
+        // Fallback về tọa độ gốc
+        ffmpegX = position.x;
+        ffmpegY = position.y;
+        console.log(`[Text Overlay] Sử dụng tọa độ gốc: (${ffmpegX}, ${ffmpegY})`);
       }
     }
     
+    console.log(`[Text Overlay] Tọa độ FFmpeg cuối cùng: (${ffmpegX}, ${ffmpegY})`);
+    
+    // Xử lý text content
+    const wrappedContent = formatTextForVideo(text, outputDimensions.width, style.fontSize);
+    const content = text;
+    
+    console.log(`[Text Overlay] Original content: ${content}`);
+    console.log(`[Text Overlay] Wrapped content: ${wrappedContent}`);
+    
+    // Xử lý timing
+    const startTime = timing?.start || 0;
+    const endTime = timing?.end || 5;
+    console.log(`[Text Overlay] Timing: ${startTime}s to ${endTime}s`);
+    
+    // Tạo filter expression
+    let textExpression = `drawtext=text='${wrappedContent}'`;
+    
+    // Thêm vị trí
+    textExpression += `:x=${ffmpegX}:y=${ffmpegY}`;
+    
+    // Thêm timing
+    textExpression += `:enable='between(t,${startTime},${endTime})'`;
+    
+    // Thêm font size
+    textExpression += `:fontsize=${style.fontSize || 24}`;
+    
+    // Thêm font file
+    textExpression += `:fontfile=arial.ttf`;
+    
+    // Thêm màu chữ
+    const hexColor = convertColorToHex(style.color);
+    textExpression += `:fontcolor=0x${hexColor}`;
+    
+    // Thêm các style khác nếu có
+    if (style.bold) {
+      textExpression += `:fontcolor=0x${hexColor}`;
+    }
+    
+    if (style.italic) {
+      textExpression += `:fontcolor=0x${hexColor}`;
+    }
+    
+    // Thêm outline nếu có
+    if (style.outline) {
+      textExpression += `:bordercolor=0x${convertColorToHex(style.outlineColor)}`;
+      textExpression += `:borderw=${style.outlineWidth || 2}`;
+    }
+    
+    // Thêm shadow nếu có
+    if (style.shadow) {
+      textExpression += `:shadowx=${style.shadowX || 2}`;
+      textExpression += `:shadowy=${style.shadowY || 2}`;
+      textExpression += `:shadowcolor=0x${convertColorToHex(style.shadowColor)}@${style.shadowOpacity || 0.4}`;
+    }
+    
+    // Thêm background nếu có
+    if (style.backgroundColor) {
+      textExpression += `:box=1`;
+      textExpression += `:boxcolor=0x${convertColorToHex(style.backgroundColor)}@${style.backgroundOpacity || 0.5}`;
+    }
+    
+    // Thêm opacity nếu khác 1
+    if (style.opacity !== 1) {
+      textExpression += `:alpha=${style.opacity}`;
+    }
+    
+    // Thêm output label
+    textExpression += outputLabel;
+    
+    console.log(`[Text Overlay] Final filter expression: ${textExpression}`);
     return textExpression;
   } catch (error) {
-    console.error('Lỗi khi tạo text overlay nâng cao:', error);
+    console.error('[Text Overlay] Error creating filter:', error);
     return null;
   }
 };
@@ -435,7 +387,7 @@ const convertCoordinates = (position, previewDimensions, outputDimensions) => {
 };
 
 
-export const createImageOverlay = async (ffmpeg, imageOverlay, index) => {
+export const createImageOverlay = async (ffmpeg, imageOverlay, index, baseStream = '[0:v]') => {
   try {
     const { source, position, dimensions, transform } = imageOverlay;
     
@@ -501,10 +453,10 @@ export const createImageOverlay = async (ffmpeg, imageOverlay, index) => {
     if (transformFilters.length > 0) {
       // Nếu cần transform, tạo một chain filter
       overlayFilter += `[${index}:v]${transformFilters.join(',')}[${transformedLabel}];`;
-      overlayFilter += `[base][${transformedLabel}]overlay=${outputPosition.x}:${outputPosition.y}`;
+      overlayFilter += `${baseStream}[${transformedLabel}]overlay=${outputPosition.x}:${outputPosition.y}`;
     } else {
       // Nếu không cần transform
-      overlayFilter += `[base][${index}:v]overlay=${outputPosition.x}:${outputPosition.y}`;
+      overlayFilter += `${baseStream}[${index}:v]overlay=${outputPosition.x}:${outputPosition.y}`;
     }
     
     // Xử lý animation nếu có
@@ -641,7 +593,7 @@ export const createTextOverlayFilter = async (overlay, index) => {
     
     const escapedContent = content.replace(/'/g, "\\'");
     const actualFontSize = fontSize || 24;
-    const hexColor = color?.replace('#', '') || 'FFFFFF';
+    const hexColor = convertColorToHex(color);
     
     const boxOpacity = 0.5;
     const borderWidth = 5;
@@ -736,7 +688,7 @@ const createGlobalTextOverlayFilter = async (overlay, index) => {
     
     const escapedContent = content.replace(/'/g, "\\'");
     const actualFontSize = fontSize || 24;
-    const hexColor = color?.replace('#', '') || 'FFFFFF';
+    const hexColor = convertColorToHex(color);
     
     // Đặt label cho output stream
     const outLabel = `v${index}`;
@@ -762,7 +714,8 @@ const createGlobalTextOverlayFilter = async (overlay, index) => {
       
     // Bắt đầu với stream video input
     let textExpression = `[0:v]`;
-    
+
+
     // Thêm drawtext filter
     textExpression += `drawtext=text='${escapedContent}'` +
                     `:x=(w-text_w)/2:y=${yPosition}` +
@@ -771,7 +724,8 @@ const createGlobalTextOverlayFilter = async (overlay, index) => {
                     `:fontcolor=0x${hexColor}` +
                     `:box=1` +
                     `:boxcolor=black@0.5` +
-                    `:boxborderw=5`;
+                    `:boxborderw=5` +
+                    `:wrap=1`;
     
     // Thêm output label
     textExpression += `[${outLabel}]`;
@@ -783,3 +737,42 @@ const createGlobalTextOverlayFilter = async (overlay, index) => {
     return null;
   }
 };
+
+// Hàm tiện ích để chuyển đổi màu sắc thành mã hex hợp lệ
+const convertColorToHex = (color) => {
+  if (!color) return 'FFFFFF'; // Mặc định màu trắng
+  
+  // Nếu đã là mã hex (bắt đầu bằng #)
+  if (color.startsWith('#')) {
+    return color.substring(1);
+  }
+  
+  // Nếu là tên màu, chuyển đổi thành mã hex
+  const colorMap = {
+    'white': 'FFFFFF',
+    'black': '000000',
+    'red': 'FF0000',
+    'green': '00FF00',
+    'blue': '0000FF',
+    'yellow': 'FFFF00',
+    'cyan': '00FFFF',
+    'magenta': 'FF00FF',
+    'gray': '808080',
+    'grey': '808080',
+    'orange': 'FFA500',
+    'purple': '800080',
+    'pink': 'FFC0CB',
+    'brown': 'A52A2A',
+    'lime': '00FF00',
+    'navy': '000080',
+    'teal': '008080',
+    'silver': 'C0C0C0',
+    'gold': 'FFD700',
+    'maroon': '800000',
+    'olive': '808000'
+  };
+  
+  const lowerColor = color.toLowerCase();
+  return colorMap[lowerColor] || 'FFFFFF'; // Mặc định màu trắng nếu không tìm thấy
+};
+

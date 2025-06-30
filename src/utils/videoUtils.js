@@ -257,6 +257,7 @@ const createGlobalTextOverlayFilter = async (overlay, index) => {
         yPosition = 'h*0.9-text_h';
     }
     
+    
     const textExpression = `drawtext=text='${escapedContent}'` +
                           `:x=(w-text_w)/2:y=${yPosition}` +
                           `:fontsize=${actualFontSize}` +
@@ -448,60 +449,22 @@ const processAudioWithFFmpeg = async (ffmpeg, audioBlob, sceneIndex, audioSettin
 };
 
 // Hàm đọc thời lượng audio từ base64
-const getAudioDuration = async (ffmpeg, base64Audio) => {
+export const getAudioDuration = async (ffmpeg, base64Audio) => {
   try {
-    // Chuyển base64 thành file tạm
     const audioBlob = await base64ToBlob(base64Audio);
-    const arrayBuffer = await audioBlob.arrayBuffer();
-    const audioData = new Uint8Array(arrayBuffer);
-    
-    // Lưu file tạm
-    const tempPath = 'temp_audio.mp3';
-    await ffmpeg.writeFile(tempPath, audioData);
-    
-    // Sử dụng FFmpeg để lấy thông tin audio
-    const command = [
-      '-i', tempPath,
-      '-f', 'null',
-      '-'
-    ];
-    
-    try {
-      // Thực hiện command và lắng nghe log để tìm thông tin thời lượng
-      await ffmpeg.exec(command);
-      
-      // Đọc log để tìm thông tin thời lượng
-      const logOutput = await ffmpeg.getLog();
-      
-      // Tìm kiếm thời lượng trong log với pattern như "Duration: 00:00:05.23"
-      const durationRegex = /Duration: (\d{2}):(\d{2}):(\d{2})\.(\d{2})/;
-      const match = logOutput.match(durationRegex);
-      
-      if (match) {
-        const hours = parseInt(match[1]);
-        const minutes = parseInt(match[2]);
-        const seconds = parseInt(match[3]);
-        const centiseconds = parseInt(match[4]);
-        
-        // Tính tổng thời gian theo giây
-        const totalSeconds = hours * 3600 + minutes * 60 + seconds + centiseconds / 100;
-        console.log(`Thời lượng audio: ${totalSeconds} giây`);
-        
-        // Xóa file tạm
-        await ffmpeg.deleteFile(tempPath);
-        
-        return totalSeconds;
-      }
-    } catch (error) {
-      console.warn('Lỗi khi đọc thời lượng từ FFmpeg:', error);
-    }
-    
-    // Xóa file tạm
-    await ffmpeg.deleteFile(tempPath);
-    
-    // Nếu không thể đọc được thời lượng, trả về thời lượng mặc định
-    console.warn('Không thể đọc thời lượng audio, sử dụng thời lượng mặc định');
-    return 5;    
+    const audioUrl = URL.createObjectURL(audioBlob);
+    return await new Promise((resolve, reject) => {
+      const audio = new Audio();
+      audio.src = audioUrl;
+      audio.addEventListener('loadedmetadata', () => {
+        resolve(audio.duration);
+        URL.revokeObjectURL(audioUrl);
+      });
+      audio.addEventListener('error', (e) => {
+        reject('Không thể đọc duration audio');
+        URL.revokeObjectURL(audioUrl);
+      });
+    });
   } catch (error) {
     console.error('Lỗi khi đọc thời lượng audio:', error);
     return 5;

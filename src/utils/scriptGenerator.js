@@ -15,16 +15,52 @@ export const generateScript = async (content, videoSettings, sceneElements, ffmp
       
     },
     global: {
-      filters: {
+      transitions: {
+        type: videoSettings.transition,
+        duration: videoSettings.transitionDuration,
+        individualTransitions: videoSettings.individualTransitions || []
+      },
+      audio: {
+        volume: videoSettings.audioEffects.volume,
+        fadeIn: videoSettings.audioEffects.fadeIn,
+        fadeOut: videoSettings.audioEffects.fadeOut,
+        normalize: videoSettings.audioEffects.normalize,
+        bass: videoSettings.audioEffects.bass,
+        treble: videoSettings.audioEffects.treble
+      },
+      effects: {
         brightness: videoSettings.brightness,
         contrast: videoSettings.contrast,
         saturation: videoSettings.saturation,
         hue: videoSettings.hue,
-        blur: videoSettings.blur
+        blur: videoSettings.blur,
+        zoomEffect: videoSettings.zoomEffect,
+        fadeIn: videoSettings.fadeIn,
+        fadeOut: videoSettings.fadeOut
       },
-      transitions: {
-        type: videoSettings.transition,
-        duration: videoSettings.transitionDuration
+      overlays: {
+        text: {
+          enabled: videoSettings.textOverlay,
+          position: videoSettings.textPosition,
+          color: videoSettings.textColor,
+          size: videoSettings.textSize,
+          background: videoSettings.textBackground,
+          backgroundColor: videoSettings.textBackgroundColor,
+          backgroundOpacity: videoSettings.textBackgroundOpacity,
+          outline: videoSettings.textOutline,
+          outlineColor: videoSettings.textOutlineColor,
+          outlineWidth: videoSettings.textOutlineWidth,
+          shadow: videoSettings.textShadow,
+          shadowColor: videoSettings.textShadowColor,
+          shadowX: videoSettings.textShadowX,
+          shadowY: videoSettings.textShadowY,
+          shadowOpacity: videoSettings.textShadowOpacity
+        },
+        watermark: {
+          enabled: videoSettings.watermark,
+          position: videoSettings.watermarkPosition,
+          opacity: videoSettings.watermarkOpacity
+        }
       }
     }
   };
@@ -91,16 +127,23 @@ export const generateScript = async (content, videoSettings, sceneElements, ffmp
           blur: videoSettings.blur
         }
       },
-      // Thêm thông tin về kích thước preview để sử dụng khi chuyển đổi tọa độ
-      scenePreviewDimensions: elements.scenePreviewDimensions || {
+      // Thêm thông tin về kích thước để chuyển đổi tọa độ overlay
+      outputDimensions: {
+        width: parseInt(videoSettings.resolution.split('x')[0]),
+        height: parseInt(videoSettings.resolution.split('x')[1])
+      },
+      previewDimensions: elements.scenePreviewDimensions || {
         width: parseInt(videoSettings.resolution.split('x')[0]),
         height: parseInt(videoSettings.resolution.split('x')[1])
       },
       audio: scene.voice?.audio_base64 ? {
         source: `data:audio/mp3;base64,${scene.voice.audio_base64}`,
-        volume: elements.audio.volume,
-        fadeIn: elements.audio.fadeIn,
-        fadeOut: elements.audio.fadeOut
+        volume: elements.audio.volume * videoSettings.audioEffects.volume,
+        fadeIn: Math.max(elements.audio.fadeIn, videoSettings.audioEffects.fadeIn),
+        fadeOut: Math.max(elements.audio.fadeOut, videoSettings.audioEffects.fadeOut),
+        normalize: videoSettings.audioEffects.normalize,
+        bass: videoSettings.audioEffects.bass,
+        treble: videoSettings.audioEffects.treble
       } : null,
       overlays: []
     };
@@ -108,6 +151,16 @@ export const generateScript = async (content, videoSettings, sceneElements, ffmp
     // Thêm stickers
     if (elements.stickers.length > 0) {
       elements.stickers.forEach(sticker => {
+        // Lấy kích thước thực tế của video
+        const [outputWidth, outputHeight] = videoSettings.resolution.split('x').map(Number);
+        // Kích thước preview  
+        const previewWidth = elements.scenePreviewDimensions?.width || outputWidth;
+        const previewHeight = elements.scenePreviewDimensions?.height || outputHeight;
+        
+        // Tính tọa độ tuyệt đối cho sticker trong video
+        const absoluteX = Math.round(sticker.position.x * outputWidth / 100);
+        const absoluteY = Math.round(sticker.position.y * outputHeight / 100);
+        
         // Get timing values for stickers if available, default to 0 and sceneDuration
         const startTime = sticker.timing?.start ?? 0;
         // Ensure end time doesn't exceed scene duration
@@ -122,7 +175,13 @@ export const generateScript = async (content, videoSettings, sceneElements, ffmp
           position: {
             x: sticker.position.x,
             y: sticker.position.y,
-            unit: 'percentage'
+            absoluteX,
+            absoluteY,
+            unit: 'percentage',
+            previewDimensions: {
+              width: previewWidth,
+              height: previewHeight
+            }
           },
           transform: {
             scale: sticker.scale,
@@ -132,7 +191,8 @@ export const generateScript = async (content, videoSettings, sceneElements, ffmp
           timing: {
             start: startTime,
             end: endTime
-          }
+          },
+          zIndex: sticker.zIndex || 0
         });
       });
     }
@@ -177,12 +237,24 @@ export const generateScript = async (content, videoSettings, sceneElements, ffmp
           style: {
             color: label.style.color,
             fontSize: label.style.fontSize,
-            fontFamily: label.style.fontFamily
+            fontFamily: label.style.fontFamily,
+            // Thêm các style khác nếu có
+            outline: label.style.outline,
+            outlineColor: label.style.outlineColor,
+            outlineWidth: label.style.outlineWidth,
+            shadow: label.style.shadow,
+            shadowColor: label.style.shadowColor,
+            shadowX: label.style.shadowX,
+            shadowY: label.style.shadowY,
+            backgroundColor: label.style.backgroundColor,
+            backgroundOpacity: label.style.backgroundOpacity,
+            backgroundPadding: label.style.backgroundPadding
           },
           timing: {
             start: startTime,
             end: endTime
-          }
+          },
+          zIndex: label.zIndex || 0
         });
       });
     }
@@ -195,7 +267,19 @@ export const generateScript = async (content, videoSettings, sceneElements, ffmp
         position: videoSettings.textPosition,
         style: {
           color: videoSettings.textColor,
-          fontSize: videoSettings.textSize
+          fontSize: videoSettings.textSize,
+          // Thêm các tùy chọn nâng cao
+          background: videoSettings.textBackground,
+          backgroundColor: videoSettings.textBackgroundColor,
+          backgroundOpacity: videoSettings.textBackgroundOpacity,
+          outline: videoSettings.textOutline,
+          outlineColor: videoSettings.textOutlineColor,
+          outlineWidth: videoSettings.textOutlineWidth,
+          shadow: videoSettings.textShadow,
+          shadowColor: videoSettings.textShadowColor,
+          shadowX: videoSettings.textShadowX,
+          shadowY: videoSettings.textShadowY,
+          shadowOpacity: videoSettings.textShadowOpacity
         }
       });
     }
@@ -209,18 +293,35 @@ export const generateScript = async (content, videoSettings, sceneElements, ffmp
       });
     }
 
+    // Debug: Log elements để kiểm tra imageOverlays
+    console.log(`[Script Generator] Scene ${scene.scene_number} elements:`, {
+      hasElements: !!elements,
+      hasImageOverlays: !!(elements?.imageOverlays),
+      imageOverlaysLength: elements?.imageOverlays?.length || 0,
+      imageOverlays: elements?.imageOverlays,
+      allElementKeys: elements ? Object.keys(elements) : []
+    });
+
     // Thêm image overlays vào sceneConfig
-    if (elements.imageOverlays?.length > 0) {
+    if (elements?.imageOverlays?.length > 0) {
+      console.log(`[Script Generator] Processing ${elements.imageOverlays.length} image overlays for scene ${scene.scene_number}`);
+      
       elements.imageOverlays.forEach((overlay, index) => {
+        console.log(`[Script Generator] Processing image overlay ${index}:`, {
+          id: overlay.id,
+          source: overlay.source,
+          scale: overlay.scale,
+          rotation: overlay.rotation,
+          opacity: overlay.opacity,
+          position: overlay.position,
+          timing: overlay.timing
+        });
+        
         // Lấy kích thước thực tế của video
         const [outputWidth, outputHeight] = videoSettings.resolution.split('x').map(Number);
         // Kích thước preview
         const previewWidth = elements.scenePreviewDimensions?.width || outputWidth;
         const previewHeight = elements.scenePreviewDimensions?.height || outputHeight;
-        
-        // Tính toán tỷ lệ kích thước giữa preview và output
-        const widthRatio = outputWidth / previewWidth;
-        const heightRatio = outputHeight / previewHeight;
         
         // Tính toán kích thước thực tế của overlay trong video output
         const originalWidth = overlay.originalDimensions.width;
@@ -231,10 +332,16 @@ export const generateScript = async (content, videoSettings, sceneElements, ffmp
         const previewOverlayHeight = originalHeight * (previewHeight / outputHeight);
         
         // Tính toán scale factor để giữ nguyên tỷ lệ kích thước
-        const scaleFactor = Math.min(
-          previewWidth / previewOverlayWidth,
-          previewHeight / previewOverlayHeight
-        ) * overlay.scale;
+        // Sử dụng outputScale đã được tính toán trong TimelineUI (đã bao gồm user scale)
+        const finalScaleFactor = overlay.scaleInfo?.outputScale || 1;
+        
+        console.log(`[Script Generator] Scale calculation for overlay ${index}:`, {
+          finalScaleFactor,
+          originalDimensions: { width: originalWidth, height: originalHeight },
+          previewDimensions: { width: previewWidth, height: previewHeight },
+          outputDimensions: { width: outputWidth, height: outputHeight },
+          scaleInfo: overlay.scaleInfo
+        });
         
         // Tính toán vị trí tuyệt đối trong video output
         const absoluteX = Math.round(overlay.position.x * outputWidth / 100);
@@ -264,14 +371,20 @@ export const generateScript = async (content, videoSettings, sceneElements, ffmp
               height: previewOverlayHeight
             },
             output: {
-              width: originalWidth * scaleFactor,
-              height: originalHeight * scaleFactor
+              width: originalWidth * finalScaleFactor,
+              height: originalHeight * finalScaleFactor
             }
           },
           transform: {
-            scale: scaleFactor,
-            rotation: overlay.rotation,
-            opacity: overlay.opacity
+            scale: finalScaleFactor,
+            rotation: overlay.rotation || 0,
+            opacity: overlay.opacity || 1,
+            // Thêm các effect khác nếu có trong overlay
+            brightness: overlay.brightness || 0,
+            contrast: overlay.contrast || 1,
+            saturation: overlay.saturation || 1,
+            hue: overlay.hue || 0,
+            blur: overlay.blur || 0
           },
           timing: {
             start: overlay.timing.start,
@@ -313,15 +426,38 @@ export const generateScript = async (content, videoSettings, sceneElements, ffmp
     }
 
     // Thêm transition nếu không phải scene cuối
-    if (index < content.length - 1 && videoSettings.transition !== 'none') {
-      sceneConfig.transition = {
-        type: videoSettings.transition,
-        duration: videoSettings.transitionDuration
-      };
+    // Transition đã được chuyển lên global để xử lý trong ffmpegUtils
+    if (index < content.length - 1) {
+      // Kiểm tra xem có individual transition cho cặp scene này không
+      const individualTransition = videoSettings.individualTransitions?.[index];
+      if (individualTransition && individualTransition.type !== 'none') {
+        sceneConfig.transition = {
+          type: individualTransition.type,
+          duration: individualTransition.duration,
+          fromScene: individualTransition.fromScene,
+          toScene: individualTransition.toScene
+        };
+        console.log(`Scene ${scene.scene_number}: Added individual transition:`, sceneConfig.transition);
+      } else if (videoSettings.transition !== 'none') {
+        // Fallback về transition chung nếu không có individual transition
+        sceneConfig.transition = {
+          type: videoSettings.transition,
+          duration: videoSettings.transitionDuration
+        };
+        console.log(`Scene ${scene.scene_number}: Added global transition:`, sceneConfig.transition);
+      }
     }
 
     script.scenes.push(sceneConfig);
   }
+
+  // Thêm logging để debug
+  console.log('Generated script:', {
+    version: script.version,
+    scenesCount: script.scenes.length,
+    globalTransitions: script.global.transitions,
+    individualTransitions: script.global.transitions.individualTransitions
+  });
 
   return script;
 }; 

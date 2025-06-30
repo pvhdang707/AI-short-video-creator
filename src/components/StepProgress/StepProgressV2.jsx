@@ -3,16 +3,16 @@ import React from 'react';
 const StepProgressV2 = ({ currentStep, totalSteps }) => {
   const steps = [
     {
-      title: 'Kịch bản',
-      description: 'Tạo và chỉnh sửa kịch bản'
+      title: 'Script',
+      description: 'Create and edit script'
     },
     {
-      title: 'Nội dung',
-      description: 'Tạo và chỉnh sửa nội dung'
+      title: 'Content',
+      description: 'Create and edit content'
     },
     {
       title: 'Video',
-      description: 'Tạo và xuất video'
+      description: 'Create and export video'
     }
   ];
 
