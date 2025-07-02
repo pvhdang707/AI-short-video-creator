@@ -189,7 +189,8 @@ const ScriptGenerator = ({ onNext, initialScript, initialIdea }) => {
     
     try {
       const updatedScript = parseEditedScript(script);
-      
+      // Lọc bỏ các scene rỗng hoặc thiếu nội dung
+      const filteredScenes = updatedScript.scenes.filter(scene => scene && scene.description && scene.description.trim() !== '');
       // Cập nhật thông tin cơ bản
       const basicUpdateData = {
         title: updatedScript.title,
@@ -198,13 +199,13 @@ const ScriptGenerator = ({ onNext, initialScript, initialIdea }) => {
         target_audience: 'Social media users'
       };
       
-      
       // Cập nhật thông tin cơ bản
       const basicResponse = await scriptAPI.updateScript(generatedScript.id, basicUpdateData);
       
       // Cập nhật scenes
       const scenesUpdateData = {
-        scenes: updatedScript.scenes.map((scene, index) => ({
+        scenes: filteredScenes.map((scene, index) => ({
+          // id: scene.id, // Không cần gửi id vì backend sẽ tạo lại toàn bộ
           scene_number: index + 1,
           description: scene.description,
           duration: scene.duration,
@@ -213,7 +214,6 @@ const ScriptGenerator = ({ onNext, initialScript, initialIdea }) => {
           voice_over: scene.voice_over
         }))
       };
-      
       
       // Cập nhật scenes
       const scenesResponse = await scriptAPI.updateScriptScenes(generatedScript.id, scenesUpdateData);
@@ -236,12 +236,20 @@ const ScriptGenerator = ({ onNext, initialScript, initialIdea }) => {
     }
   };
 
-  const handleNext = () => {
+  const handleNext = async () => {
     if (generatedScript) {
       if (hasChanges) {
         const updatedScript = parseEditedScript(script);
         onNext(updatedScript);
       } else {
+        // Nếu script chưa có creator_id thì gọi API để cập nhật
+        if (!generatedScript.creator_id) {
+          try {
+            await videoScriptAPI.saveScript(generatedScript.id);
+          } catch (err) {
+            
+          }
+        }
         onNext(generatedScript);
       }
     }
@@ -420,7 +428,7 @@ const ScriptGenerator = ({ onNext, initialScript, initialIdea }) => {
             <div className="flex justify-end pt-4">
               <button
                 onClick={handleNext}
-                disabled={!generatedScript}
+                disabled={!generatedScript || hasChanges}
                 className="px-6 py-3 bg-blue-600 text-white rounded-lg disabled:opacity-50 hover:bg-blue-700 flex items-center gap-2 text-base font-medium"
               >
                 <span>Continue</span>

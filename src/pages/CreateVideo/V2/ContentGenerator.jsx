@@ -14,50 +14,50 @@ import { detectLanguage, getDefaultVoiceForLanguage } from '../../../utils/langu
 // Danh sách các giọng đọc cho mỗi ngôn ngữ
 const VOICE_OPTIONS = {
   'vi-VN': [
-    { id: 'vi-VN-Wavenet-A', name: 'Giọng 1 (Nữ)', gender: 'female', language: 'vi-VN' },
-    { id: 'vi-VN-Wavenet-B', name: 'Giọng 2 (Nam)', gender: 'male', language: 'vi-VN' },
-    { id: 'vi-VN-Wavenet-C', name: 'Giọng 3 (Nữ)', gender: 'female', language: 'vi-VN' },
-    { id: 'vi-VN-Wavenet-D', name: 'Giọng 4 (Nam)', gender: 'male', language: 'vi-VN' },
-    { id: 'vi-VN-Standard-A', name: 'Giọng 5 (Nữ)', gender: 'female', language: 'vi-VN' },
-    { id: 'vi-VN-Standard-B', name: 'Giọng 6 (Nam)', gender: 'male', language: 'vi-VN' },
-    { id: 'vi-VN-Standard-C', name: 'Giọng 7 (Nữ)', gender: 'female', language: 'vi-VN' },
-    { id: 'vi-VN-Standard-D', name: 'Giọng 8 (Nam)', gender: 'male', language: 'vi-VN' },
+    { id: 'vi-VN-Wavenet-A', name: 'Giọng 1 ', gender: 'female', language: 'vi-VN' },
+    { id: 'vi-VN-Wavenet-B', name: 'Giọng 2 ', gender: 'male', language: 'vi-VN' },
+    { id: 'vi-VN-Wavenet-C', name: 'Giọng 3 ', gender: 'female', language: 'vi-VN' },
+    { id: 'vi-VN-Wavenet-D', name: 'Giọng 4 ', gender: 'male', language: 'vi-VN' },
+    { id: 'vi-VN-Standard-A', name: 'Giọng 5 ', gender: 'female', language: 'vi-VN' },
+    { id: 'vi-VN-Standard-B', name: 'Giọng 6 ', gender: 'male', language: 'vi-VN' },
+    { id: 'vi-VN-Standard-C', name: 'Giọng 7 ', gender: 'female', language: 'vi-VN' },
+    { id: 'vi-VN-Standard-D', name: 'Giọng 8 ', gender: 'male', language: 'vi-VN' },
   ],
   'en-US': [
-    { id: 'en-US-Wavenet-A', name: 'Voice 1 (Male)', gender: 'male', language: 'en-US' },
-    { id: 'en-US-Wavenet-B', name: 'Voice 2 (Male)', gender: 'male', language: 'en-US' },
-    { id: 'en-US-Wavenet-C', name: 'Voice 3 (Female)', gender: 'female', language: 'en-US' },
-    { id: 'en-US-Wavenet-D', name: 'Voice 4 (Male)', gender: 'male', language: 'en-US' },
-    { id: 'en-US-Wavenet-E', name: 'Voice 5 (Female)', gender: 'female', language: 'en-US' },
-    { id: 'en-US-Wavenet-F', name: 'Voice 6 (Female)', gender: 'female', language: 'en-US' },
-    { id: 'en-US-Wavenet-G', name: 'Voice 7 (Female)', gender: 'female', language: 'en-US' },
-    { id: 'en-US-Wavenet-H', name: 'Voice 8 (Female)', gender: 'female', language: 'en-US' },
-    { id: 'en-US-Wavenet-I', name: 'Voice 9 (Male)', gender: 'male', language: 'en-US' },
-    { id: 'en-US-Wavenet-J', name: 'Voice 10 (Male)', gender: 'male', language: 'en-US' },
+    { id: 'en-US-Wavenet-A', name: 'Voice 1 ', gender: 'male', language: 'en-US' },
+    { id: 'en-US-Wavenet-B', name: 'Voice 2 ', gender: 'male', language: 'en-US' },
+    { id: 'en-US-Wavenet-C', name: 'Voice 3 ', gender: 'female', language: 'en-US' },
+    { id: 'en-US-Wavenet-D', name: 'Voice 4 ', gender: 'male', language: 'en-US' },
+    { id: 'en-US-Wavenet-E', name: 'Voice 5 ', gender: 'female', language: 'en-US' },
+    { id: 'en-US-Wavenet-F', name: 'Voice 6 ', gender: 'female', language: 'en-US' },
+    { id: 'en-US-Wavenet-G', name: 'Voice 7 ', gender: 'female', language: 'en-US' },
+    { id: 'en-US-Wavenet-H', name: 'Voice 8 ', gender: 'female', language: 'en-US' },
+    { id: 'en-US-Wavenet-I', name: 'Voice 9 ', gender: 'male', language: 'en-US' },
+    { id: 'en-US-Wavenet-J', name: 'Voice 10 ', gender: 'male', language: 'en-US' },
   ],
   'zh-CN': [
-    { id: 'zh-CN-Wavenet-A', name: '声音 1 (男)', gender: 'male', language: 'zh-CN' },
-    { id: 'zh-CN-Wavenet-B', name: '声音 2 (女)', gender: 'female', language: 'zh-CN' },
-    { id: 'zh-CN-Wavenet-C', name: '声音 3 (男)', gender: 'male', language: 'zh-CN' },
-    { id: 'zh-CN-Wavenet-D', name: '声音 4 (女)', gender: 'female', language: 'zh-CN' },
+    { id: 'zh-CN-Wavenet-A', name: '声音 1 ', gender: 'male', language: 'zh-CN' },
+    { id: 'zh-CN-Wavenet-B', name: '声音 2 ', gender: 'female', language: 'zh-CN' },
+    { id: 'zh-CN-Wavenet-C', name: '声音 3 ', gender: 'male', language: 'zh-CN' },
+    { id: 'zh-CN-Wavenet-D', name: '声音 4 ', gender: 'female', language: 'zh-CN' },
   ],
   'ja-JP': [  
-    { id: 'ja-JP-Wavenet-A', name: '声 1 (男)', gender: 'male', language: 'ja-JP' },
-    { id: 'ja-JP-Wavenet-B', name: '声 2 (女)', gender: 'female', language: 'ja-JP' },
-    { id: 'ja-JP-Wavenet-C', name: '声 3 (男)', gender: 'male', language: 'ja-JP' },
-    { id: 'ja-JP-Wavenet-D', name: '声 4 (女)', gender: 'female', language: 'ja-JP' },
+    { id: 'ja-JP-Wavenet-A', name: '声 1 ', gender: 'male', language: 'ja-JP' },
+    { id: 'ja-JP-Wavenet-B', name: '声 2 ', gender: 'female', language: 'ja-JP' },
+    { id: 'ja-JP-Wavenet-C', name: '声 3 ', gender: 'male', language: 'ja-JP' },
+    { id: 'ja-JP-Wavenet-D', name: '声 4 ', gender: 'female', language: 'ja-JP' },
   ],
   'ko-KR': [
-    { id: 'ko-KR-Wavenet-A', name: '목소리 1 (남)', gender: 'male', language: 'ko-KR' },
-    { id: 'ko-KR-Wavenet-B', name: '목소리 2 (여)', gender: 'female', language: 'ko-KR' },
-    { id: 'ko-KR-Wavenet-C', name: '목소리 3 (남)', gender: 'male', language: 'ko-KR' },
-    { id: 'ko-KR-Wavenet-D', name: '목소리 4 (여)', gender: 'female', language: 'ko-KR' },
+    { id: 'ko-KR-Wavenet-A', name: '목소리 1 ', gender: 'male', language: 'ko-KR' },
+    { id: 'ko-KR-Wavenet-B', name: '목소리 2 ', gender: 'female', language: 'ko-KR' },
+    { id: 'ko-KR-Wavenet-C', name: '목소리 3 ', gender: 'male', language: 'ko-KR' },
+    { id: 'ko-KR-Wavenet-D', name: '목소리 4 ', gender: 'female', language: 'ko-KR' },
   ],
   'fr-FR': [
-    { id: 'fr-FR-Wavenet-A', name: 'Voix 1 (Homme)', gender: 'male', language: 'fr-FR' },
-    { id: 'fr-FR-Wavenet-B', name: 'Voix 2 (Femme)', gender: 'female', language: 'fr-FR' },  
-    { id: 'fr-FR-Wavenet-C', name: 'Voix 3 (Homme)', gender: 'male', language: 'fr-FR' },
-    { id: 'fr-FR-Wavenet-D', name: 'Voix 4 (Femme)', gender: 'female', language: 'fr-FR' },
+    { id: 'fr-FR-Wavenet-A', name: 'Voix 1 ', gender: 'male', language: 'fr-FR' },
+    { id: 'fr-FR-Wavenet-B', name: 'Voix 2 ', gender: 'female', language: 'fr-FR' },  
+    { id: 'fr-FR-Wavenet-C', name: 'Voix 3 ', gender: 'male', language: 'fr-FR' },
+    { id: 'fr-FR-Wavenet-D', name: 'Voix 4 ', gender: 'female', language: 'fr-FR' },
   ]
 
 
@@ -77,6 +77,7 @@ const ContentGenerator = ({ script, onNext, onBack, initialContent }) => {
   const [generatedImages, setGeneratedImages] = useState({});
   const [generatedVoices, setGeneratedVoices] = useState({});
   const [regeneratingScene, setRegeneratingScene] = useState(null);
+  const [isUploadingCover, setIsUploadingCover] = useState(false);
 
   // Hàm tạo lại ảnh cho một scene - ĐÃ CẢI THIỆN
   const handleRegenerateImage = async (sceneNumber, prompt) => {
@@ -445,16 +446,37 @@ const ContentGenerator = ({ script, onNext, onBack, initialContent }) => {
         return;
       }
 
-      // Gọi API uploadImagesFromUrls để upload ảnh từ Replicate lên cloud storage
-      try {
-        const uploadResponse = await videoScriptAPI.uploadImagesFromUrls(script.id);
-        console.log('Images uploaded successfully:', uploadResponse.data);
-        showSuccess('Images uploaded to cloud storage successfully!');
-      } catch (uploadError) {
-        console.error('Error uploading images:', uploadError);
-        showError('Failed to upload images to cloud storage. Please try again.');
-        return;
+      // Nếu đã có cover_image thì bỏ qua upload
+      if (!script.cover_image) {
+        setIsUploadingCover(true); // Bắt đầu loading
+        try {
+          // Lấy thông tin ảnh của scene đầu tiên
+          const firstImage = generatedImages[1];
+          if (!firstImage || !firstImage.url) {
+            showError('Không tìm thấy ảnh của scene đầu tiên để làm cover image!');
+            setIsUploadingCover(false);
+            return;
+          }
+
+          // Gọi API backend để upload ảnh này lên cloud storage
+          const uploadResponse = await videoScriptAPI.uploadImagesFromUrls(script.id);
+          const coverImageUrl = uploadResponse?.data?.cover_image;
+          if (coverImageUrl) {
+            showSuccess('Cover image uploaded successfully!');
+          } else {
+            showError('Cannot get cover image URL after upload!');
+            setIsUploadingCover(false);
+            return;
+          }
+        } catch (uploadError) {
+          console.error('Error uploading cover image:', uploadError);
+          showError('Error uploading cover image to cloud storage. Please try again.');
+          setIsUploadingCover(false);
+          return;
+        }
+        setIsUploadingCover(false); // Kết thúc loading
       }
+      // --- Kết thúc xử lý cover image ---
 
       const processedScenes = await Promise.all(scenes.map(async (scene, index) => {
         const voiceData = generatedVoices[index + 1];
@@ -715,17 +737,29 @@ const ContentGenerator = ({ script, onNext, onBack, initialContent }) => {
         
         <button
           onClick={handleNext}
-          disabled={!scenes.some((scene, index) => {
+          disabled={isUploadingCover || !scenes.some((scene, index) => {
             const hasVoice = generatedVoices[index + 1] || scene.voiceSettings.option === 'upload';
             const hasImage = generatedImages[index + 1];
             return hasVoice && hasImage;
           })}
           className="group flex items-center space-x-2 px-8 py-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-xl disabled:from-slate-600 disabled:to-slate-700 disabled:text-slate-400 hover:from-blue-600 hover:to-purple-700 transition-all duration-300 disabled:cursor-not-allowed shadow-lg hover:shadow-blue-500/25 border border-blue-400/20 backdrop-blur-sm"
         >
-          <span className="font-medium">Continue to Video Creation</span>
-          <svg className="w-5 h-5 group-hover:translate-x-1 transition-transform duration-300 group-disabled:translate-x-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-          </svg>
+          {isUploadingCover ? (
+            <>
+              <svg className="w-5 h-5 animate-spin mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path>
+              </svg>
+              <span>Đang upload ảnh bìa...</span>
+            </>
+          ) : (
+            <>
+              <span className="font-medium">Continue to Video Creation</span>
+              <svg className="w-5 h-5 group-hover:translate-x-1 transition-transform duration-300 group-disabled:translate-x-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </>
+          )}
         </button>
       </div>
     </div>

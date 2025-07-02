@@ -149,7 +149,7 @@ export const generateScript = async (content, videoSettings, sceneElements, ffmp
     };
 
     // Thêm stickers
-    if (elements.stickers.length > 0) {
+    if (Array.isArray(elements.stickers) && elements.stickers.length > 0) {
       elements.stickers.forEach(sticker => {
         // Lấy kích thước thực tế của video
         const [outputWidth, outputHeight] = videoSettings.resolution.split('x').map(Number);
@@ -198,7 +198,7 @@ export const generateScript = async (content, videoSettings, sceneElements, ffmp
     }
 
     // Thêm labels
-    if (elements.labels.length > 0) {
+    if (Array.isArray(elements.labels) && elements.labels.length > 0) {
       elements.labels.forEach(label => {
         // Lấy kích thước thực tế của video
         const [outputWidth, outputHeight] = videoSettings.resolution.split('x').map(Number);
@@ -259,16 +259,25 @@ export const generateScript = async (content, videoSettings, sceneElements, ffmp
       });
     }
 
-    // Thêm text overlay nếu được bật
-    if (videoSettings.textOverlay) {
+    // Thêm subtitle tự động nếu chưa có (chỉ kiểm tra các overlay có position.preset)
+    const hasAutoSubtitle = sceneConfig.overlays.some(
+      o => o.type === 'text' && o.position && o.position.preset
+    );
+    if (videoSettings.textOverlay && !hasAutoSubtitle) {
       sceneConfig.overlays.push({
-        type: "text_overlay",
-        content: scene.voice_over || "",
-        position: videoSettings.textPosition,
+        type: 'text',
+        content: scene.voice_over || scene.text || '',
+        position: {
+          preset: videoSettings.textPosition,
+          unit: 'preset',
+          previewDimensions: elements.scenePreviewDimensions || {
+            width: parseInt(videoSettings.resolution.split('x')[0]),
+            height: parseInt(videoSettings.resolution.split('x')[1])
+          }
+        },
         style: {
           color: videoSettings.textColor,
           fontSize: videoSettings.textSize,
-          // Thêm các tùy chọn nâng cao
           background: videoSettings.textBackground,
           backgroundColor: videoSettings.textBackgroundColor,
           backgroundOpacity: videoSettings.textBackgroundOpacity,
@@ -280,7 +289,12 @@ export const generateScript = async (content, videoSettings, sceneElements, ffmp
           shadowX: videoSettings.textShadowX,
           shadowY: videoSettings.textShadowY,
           shadowOpacity: videoSettings.textShadowOpacity
-        }
+        },
+        timing: {
+          start: 0,
+          end: sceneDuration
+        },
+        zIndex: 999 // Đảm bảo subtitle luôn trên cùng
       });
     }
 
@@ -303,7 +317,7 @@ export const generateScript = async (content, videoSettings, sceneElements, ffmp
     });
 
     // Thêm image overlays vào sceneConfig
-    if (elements?.imageOverlays?.length > 0) {
+    if (Array.isArray(elements.imageOverlays) && elements.imageOverlays.length > 0) {
       console.log(`[Script Generator] Processing ${elements.imageOverlays.length} image overlays for scene ${scene.scene_number}`);
       
       elements.imageOverlays.forEach((overlay, index) => {
@@ -332,8 +346,8 @@ export const generateScript = async (content, videoSettings, sceneElements, ffmp
         const previewOverlayHeight = originalHeight * (previewHeight / outputHeight);
         
         // Tính toán scale factor để giữ nguyên tỷ lệ kích thước
-        // Sử dụng outputScale đã được tính toán trong TimelineUI (đã bao gồm user scale)
-        const finalScaleFactor = overlay.scaleInfo?.outputScale || 1;
+        // Sử dụng finalScale đã được tính toán chính xác trong TimelineUI
+        const finalScaleFactor = overlay.scaleInfo?.finalScale || 1;
         
         console.log(`[Script Generator] Scale calculation for overlay ${index}:`, {
           finalScaleFactor,
@@ -390,37 +404,20 @@ export const generateScript = async (content, videoSettings, sceneElements, ffmp
             start: overlay.timing.start,
             end: overlay.timing.end
           },
-          // Thêm thông tin để tạo lệnh FFmpeg với filter_complex
-          // ffmpeg: {
-          //   // Input files
-          //   inputs: [
-          //     { file: 'scene_0_image.jpg', options: ['-loop', '1'] },
-          //     { file: 'scene_0_audio_temp.mp3', options: ['-t', '11.276'] },
-          //     { file: `overlay_${index}.png` }
-          //   ],
-          //   // Filter complex chain - sửa lại cú pháp để kết nối các stream đúng cách
-          //   filterComplex: [
-          //     // Load overlay image và scale nó
-          //     `movie=${overlay.source}[in${index}];[in${index}]scale=iw*${scaleFactor}:ih*${scaleFactor}[scaled${index}]`,
-          //     // Overlay lên video chính
-          //     `[0:v][scaled${index}]overlay=${absoluteX}:${absoluteY}[v${index}]`
-          //   ].join(';'),
-          //   // Output mapping
-          //   outputMapping: [
-          //     `-map "[v${index}]"`,  // Map video output từ filter_complex
-          //     '-map 1:a'            // Map audio từ input thứ 2
-          //   ],
-          //   // Encoding settings
-          //   encoding: {
-          //     videoCodec: 'libx264',
-          //     preset: 'medium',
-          //     crf: '23',
-          //     fps: '24',
-          //     resolution: '854x480',
-          //     pixelFormat: 'yuv420p',
-          //     shortest: true
-          //   }
-          // }
+          // Thêm thông tin scaleInfo để ffmpegUtils sử dụng chính xác
+          scaleInfo: overlay.scaleInfo || {
+            displayScale: 1,
+            finalScale: finalScaleFactor,
+            previewDimensions: {
+              width: previewWidth,
+              height: previewHeight
+            },
+            outputDimensions: {
+              width: outputWidth,
+              height: outputHeight
+            },
+            scaleRatio: outputWidth / previewWidth
+          }
         });
       });
     }

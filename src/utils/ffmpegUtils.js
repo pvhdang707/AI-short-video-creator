@@ -1,6 +1,8 @@
 import { FFmpeg } from '@ffmpeg/ffmpeg';
-// import { processAdvancedAudio } from './overlayUtils';
+import { applyImageFilters, processAdvancedAudio } from './overlayUtils';
 import { formatTextForVideo } from './textUtils';
+import { ensureFontInFS } from "./ffmpegFontLoader";
+import { fontList } from "./fontList";
 // import { getAudioDuration } from './videoUtils';
 
 
@@ -344,24 +346,25 @@ export const generateVideoFromScript = async (ffmpeg, script, onProgress) => {
       let audioPath = null;
       if (scene.audio) {
         try {
-          console.log(`Đang xử lý audio cho scene ${i + 1}`);
-          
-          // Xử lý audio đơn giản thay vì dùng processAdvancedAudio
-          if (scene.audio.source.startsWith('data:')) {
-            // Nếu là base64, chuyển đổi thành file
-            const audioData = scene.audio.source.split(',')[1];
-            const audioBytes = Uint8Array.from(atob(audioData), c => c.charCodeAt(0));
-            audioPath = `scene_${i}_audio_temp.mp3`;
-            await ffmpeg.writeFile(audioPath, audioBytes);
-          } else {
-            // Nếu là URL, tải về và lưu
-            const response = await fetch(scene.audio.source);
-            const audioBytes = new Uint8Array(await response.arrayBuffer());
-            audioPath = `scene_${i}_audio_temp.mp3`;
-            await ffmpeg.writeFile(audioPath, audioBytes);
-          }
-          
-          console.log(`Audio cho scene ${i + 1} đã được xử lý: ${audioPath}`);
+          console.log(`Đang xử lý audio nâng cao cho scene ${i + 1}`);
+          audioPath = await processAdvancedAudio(
+            ffmpeg, 
+            scene.audio.source, 
+            i, 
+            {
+              volume: scene.audio.volume || 1,
+              fadeIn: scene.audio.fadeIn || 0,
+              fadeOut: scene.audio.fadeOut || 0,
+              duration: sceneDuration,
+              equalizer: scene.audio.equalizer || null,
+              bass: scene.audio.bass || 0,
+              treble: scene.audio.treble || 0,
+              normalize: scene.audio.normalize || false,
+              pitch: scene.audio.pitch || 1,
+              tempo: scene.audio.tempo || 1
+            }
+          );
+          console.log(`Đã xử lý xong audio nâng cao cho scene ${i + 1}`);
         } catch (error) {
           throw new Error(`Lỗi khi xử lý audio scene ${i + 1}: ${error.message}`);
         }
@@ -371,32 +374,54 @@ export const generateVideoFromScript = async (ffmpeg, script, onProgress) => {
       const imageFilters = [];
       
       // Thêm filter để giữ nguyên aspect ratio
-      const outputResolution = output.resolution || '854x480';
-      const [targetWidth, targetHeight] = outputResolution.split('x').map(Number);
+      const outputDimensions = scene.outputDimensions || { width: 854, height: 480 };
+      const previewDimensions = scene.previewDimensions || { width: 400, height: 300 };
       
-      // Xử lý overlays trước để biết có overlay không
-      const overlayResult = await processSceneOverlays(scene, i, ffmpeg, true); // true vì có aspect ratio filter
+      // 1. Filter giữ aspect ratio
+      const aspectRatioFilter = `[0:v]scale=${outputDimensions.width}:${outputDimensions.height}:force_original_aspect_ratio=decrease,pad=${outputDimensions.width}:${outputDimensions.height}:(ow-iw)/2:(oh-ih)/2:black[scaled]`;
+      imageFilters.push(aspectRatioFilter);
+      
+      // 2. Nếu có filter ảnh nền, nối tiếp từ [scaled] -> [scene_bg]
+      let lastLabel = '[scaled]';
+      if (scene.image?.filters) {
+        const imageFilterString = applyImageFilters(scene.image.filters);
+        if (imageFilterString) {
+          imageFilters.push(`${lastLabel}${imageFilterString}[scene_bg]`);
+          lastLabel = '[scene_bg]';
+        }
+      }
+      
+      // 3. Xử lý overlays, truyền label đầu vào động
+      const overlayResult = await processSceneOverlays(scene, i, ffmpeg, lastLabel); // truyền lastLabel
       const overlayFilters = overlayResult.filterComplex;
       const overlayInputs = overlayResult.inputs;
+      const hasOverlays = overlayResult.hasOverlays;
+
+      // Nếu KHÔNG có overlay, phải nối label cuối thành [outv]
+      if (!hasOverlays) {
+        // Đảm bảo width/height chẵn
+        imageFilters.push(`${lastLabel}pad=width=ceil(iw/2)*2:height=ceil(ih/2)*2[padout]`);
+        imageFilters.push(`[padout]null[outv]`);
+      } else if (overlayFilters) {
+        // Nếu CÓ overlay/text overlay, cần kiểm tra filter cuối cùng là gì
+        // overlayFilters có thể là chuỗi filter, lấy label cuối cùng
+        // Tìm label cuối cùng trong overlayFilters
+        const overlayFilterStr = overlayFilters.trim();
+        // Regex tìm label cuối cùng dạng [label]
+        const match = overlayFilterStr.match(/\[(\w+)\];?\s*$/);
+        let lastOverlayLabel = match ? `[${match[1]}]` : '[outv]';
+        if (lastOverlayLabel !== '[outv]') {
+          // Thêm filter pad và null[outv]
+          allFilters.push(`${lastOverlayLabel}pad=width=ceil(iw/2)*2:height=ceil(ih/2)*2[padout]`);
+          allFilters.push(`[padout]null[outv]`);
+        }
+      }
 
       console.log(`[Scene ${i}] Overlay processing result:`, {
         hasOverlays: overlayResult.hasOverlays,
         filtersLength: overlayFilters?.length || 0,
         inputsCount: overlayInputs?.length || 0
       });
-
-      // Scale và pad để giữ nguyên aspect ratio
-      // Nếu có overlays → filter này sẽ được overlay sử dụng 
-      // Nếu không có overlays → filter này cần output [outv]
-      const hasOverlays = overlayResult.hasOverlays;
-      const aspectRatioFilter = hasOverlays 
-        ? `[0:v]scale=${targetWidth}:${targetHeight}:force_original_aspect_ratio=decrease,pad=${targetWidth}:${targetHeight}:(ow-iw)/2:(oh-ih)/2:black[scaled]`
-        : `[0:v]scale=${targetWidth}:${targetHeight}:force_original_aspect_ratio=decrease,pad=${targetWidth}:${targetHeight}:(ow-iw)/2:(oh-ih)/2:black[outv]`;
-      
-      imageFilters.push(aspectRatioFilter);
-      
-      // Removed image filters processing as it causes syntax errors
-      // TODO: Implement proper image filters if needed
 
       // Kết hợp tất cả các filter
       const allFilters = [...imageFilters];
@@ -476,7 +501,7 @@ export const generateVideoFromScript = async (ffmpeg, script, onProgress) => {
         // Thực thi lệnh FFmpeg với timeout
         const ffmpegPromise = ffmpeg.exec(ffmpegCommand);
         const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('FFmpeg timeout after 300 seconds')), 300000)
+          setTimeout(() => reject(new Error('FFmpeg timeout after 6000 seconds')), 6000000)
         );
         
         console.log(`Bắt đầu thực thi FFmpeg cho scene ${i + 1}...`);
@@ -836,7 +861,28 @@ export const generateVideoFromScript = async (ffmpeg, script, onProgress) => {
         await ffmpeg.deleteFile(`scene_${i}_audio_temp.mp3`);
         await ffmpeg.deleteFile(`scene_${i}_audio.mp3`);
         await ffmpeg.deleteFile(`scene_${i}.mp4`);
+        
+        // Xóa các file text tạm thời
+        for (let j = 0; j < 10; j++) { // Giả sử tối đa 10 overlay per scene
+          try {
+            await ffmpeg.deleteFile(`text_${i}_${j}.txt`);
+          } catch (e) {
+            // File có thể không tồn tại
+          }
+        }
       }
+      
+      // Xóa các file global text
+      try {
+        const files = await ffmpeg.listDir('/');
+        const textFiles = files.filter(file => file.name.startsWith('globaltext_') && file.name.endsWith('.txt'));
+        for (const file of textFiles) {
+          await ffmpeg.deleteFile(file.name);
+        }
+      } catch (e) {
+        console.log('Không thể xóa global text files:', e);
+      }
+      
       // Xóa concat.txt nếu tồn tại
       try {
         await ffmpeg.deleteFile('concat.txt');
@@ -982,24 +1028,40 @@ const processIndividualOverlay = async (
   outputDimensions,
   previewDimensions,
   currentVideoStream,
-  isLast
+  nextLabel // truyền nextLabel động
 ) => {
   console.log(`[Scene ${sceneIndex}] Processing individual overlay ${overlayIndex}:`, overlay.type);
   
-  const nextLabel = isLast ? 'outv' : `v${overlayIndex + 1}`;
-  
   switch (overlay.type) {
     case 'text':
-    case 'label':
-      return await processTextOverlay(
-        overlay, 
-        overlayIndex, 
-        sceneIndex, 
-        currentVideoStream, 
-        nextLabel,
-        outputDimensions,
-        previewDimensions
-      );
+    case 'text_overlay': {
+      // Nếu có position.preset (top/center/bottom), dùng createGlobalTextOverlayFilter
+      if (overlay.position && overlay.position.preset) {
+        const filter = await createGlobalTextOverlayFilter({
+          content: overlay.content,
+          position: overlay.position.preset,
+          style: overlay.style,
+          dimensions: { output: outputDimensions }
+        }, nextLabel, ffmpeg); // truyền ffmpeg
+        return {
+          filter: `${currentVideoStream}${filter}`,
+          outputStream: `[${nextLabel}]`,
+          inputs: []
+        };
+      } else {
+        // Logic cũ cho text overlay thường
+        return await processTextOverlay(
+          overlay, 
+          overlayIndex, 
+          sceneIndex, 
+          currentVideoStream, 
+          nextLabel,
+          outputDimensions,
+          previewDimensions,
+          ffmpeg
+        );
+      }
+    }
       
     case 'image':
       return await processImageOverlay(
@@ -1039,10 +1101,19 @@ const processTextOverlay = async (
   currentVideoStream, 
   nextLabel,
   outputDimensions,
-  previewDimensions
+  previewDimensions,
+  ffmpeg
 ) => {
   try {
     const { content, position, style, timing } = overlay;
+    
+    console.log(`[Text Overlay ${overlayIndex}] Processing text:`, {
+      content,
+      position,
+      style,
+      timing,
+      sceneIndex
+    });
     
     // Chuyển đổi tọa độ từ preview sang output
     const outputPosition = convertCoordinatesToFFmpeg(position, previewDimensions, outputDimensions);
@@ -1051,8 +1122,20 @@ const processTextOverlay = async (
     const formattedText = formatTextForVideo(content, outputDimensions.width, style.fontSize || 24);
     const escapedText = formattedText.replace(/'/g, "\\'");
     
-    // Tạo filter expression
-    let textFilter = `drawtext=text='${escapedText}'`;
+    console.log(`[Text Overlay ${overlayIndex}] Text processing:`, {
+      originalContent: content,
+      formattedText,
+      escapedText
+    });
+    
+    // Tạo filter expression với label riêng biệt để tránh xung đột
+    const textLabel = `text${overlayIndex}`;
+    
+    // Sử dụng textfile thay vì text để tránh xung đột với các drawtext khác
+    const textFileName = `text_${sceneIndex}_${overlayIndex}.txt`;
+    await ffmpeg.writeFile(textFileName, new TextEncoder().encode(escapedText));
+    
+    let textFilter = `drawtext=textfile='${textFileName}'`;
     
     // Thêm vị trí
     textFilter += `:x=${outputPosition.x}:y=${outputPosition.y}`;
@@ -1086,8 +1169,18 @@ const processTextOverlay = async (
       previewDimensions: position.previewDimensions || previewDimensions
     });
     
+    // Xác định font file hợp lệ
+    let fontFile = "ARIAL.TTF";
+    if (style && style.fontFamily) {
+      // Chỉ cho phép các font có trong fontList
+      const found = fontList.find(f => f.file === style.fontFamily);
+      if (found) fontFile = found.file;
+    }
+    // Nạp font vào FS ảo nếu cần
+    const fontPath = await ensureFontInFS(ffmpeg, fontFile);
+    
     textFilter += `:fontsize=${scaledFontSize}`;
-    textFilter += `:fontfile=arial.ttf`;
+    textFilter += `:fontfile=${fontPath}`;
     textFilter += `:fontcolor=0x${convertColorToHex(style.color || '#ffffff')}`;
     
     // Thêm các style khác
@@ -1106,7 +1199,8 @@ const processTextOverlay = async (
       textFilter += `:boxborderw=${style.backgroundPadding || 5}`;
     }
     
-    const fullFilter = `${currentVideoStream}${textFilter}[${nextLabel}]`;
+    // Tạo filter với label riêng biệt
+    const fullFilter = `${currentVideoStream}${textFilter}[${textLabel}];[${textLabel}]null[${nextLabel}]`;
     
     console.log(`[Text Overlay ${overlayIndex}] Filter created:`, fullFilter);
     
@@ -1135,7 +1229,16 @@ const processImageOverlay = async (
   previewDimensions
 ) => {
   try {
-    const { source, position, transform, timing } = overlay;
+    const { source, position, transform, timing, dimensions, scaleInfo, rotation, opacity, scale } = overlay;
+    
+    console.log(`[Image Overlay ${overlayIndex}] Processing overlay:`, {
+      source: source.substring(0, 50) + '...',
+      position,
+      transform,
+      timing,
+      hasScaleInfo: !!scaleInfo,
+      scaleInfo
+    });
     
     // Tải image vào FFmpeg
     const imagePath = `overlay_image_${sceneIndex}_${overlayIndex}.png`;
@@ -1151,85 +1254,91 @@ const processImageOverlay = async (
       }
       imageData = new Uint8Array(await response.arrayBuffer());
     }
-    
     await ffmpeg.writeFile(imagePath, imageData);
-    
+
+    // Đọc kích thước thực tế của ảnh overlay bằng JS Image object
+    let width = overlay.originalDimensions?.width;
+    let height = overlay.originalDimensions?.height;
+    if (!width || !height) {
+      try {
+        const { width: w, height: h } = await getImageDimensions(source);
+        width = w;
+        height = h;
+      } catch (e) {
+        width = 512;
+        height = 512;
+      }
+    }
+    // Đảm bảo width/height là số
+    width = Number(width) || 512;
+    height = Number(height) || 512;
+
+    // Tính diagonal để pad đủ lớn cho xoay
+    const diagonal = Math.ceil(Math.sqrt(width * width + height * height));
+
     // Chuyển đổi tọa độ và scale
     const outputPosition = convertCoordinatesToFFmpeg(position, previewDimensions, outputDimensions);
-    const scaleRatio = outputDimensions.width / previewDimensions.width;
-    const outputScale = (transform?.scale || 1) * scaleRatio;
-    
-    // Tính toán input index đúng: 
-    // inputIndex đã được tính toán từ processSceneOverlays và đã bao gồm offset cho audio
-    // Chỉ cần sử dụng trực tiếp
-    
-    console.log(`[Image Overlay ${overlayIndex}] Using input index: ${inputIndex}`);
-    
-    // Tạo filter cho image
     let imageFilter = `[${inputIndex}:v]`;
-    
-    // Áp dụng transform với applyImageFilters
-    const imageFilters = {
-      scale: outputScale,
-      rotation: transform?.rotation || 0,
-      opacity: transform?.opacity || 1,
-      brightness: transform?.brightness || 0,
-      contrast: transform?.contrast || 1,
-      saturation: transform?.saturation || 1,
-      hue: transform?.hue || 0,
-      blur: transform?.blur || 0
-    };
-    
-    // Sử dụng applyImageFilters để tạo filter transform
-    const imageFilterString = applyImageFilters(imageFilters, `[${inputIndex}:v]`, `[img${overlayIndex}]`);
-    
-    if (imageFilterString) {
-      imageFilter = imageFilterString;
-      console.log(`[Image Overlay ${overlayIndex}] Using applyImageFilters:`, imageFilterString);
-    } else {
-      // Fallback to manual filter creation
-      const transformFilters = [];
-      
-      if (outputScale !== 1) {
-        transformFilters.push(`scale=iw*${outputScale}:ih*${outputScale}`);
-      }
-      
-      if (transform?.rotation) {
-        transformFilters.push(`rotate=${transform.rotation}*PI/180`);
-      }
-      
-      if (transform?.opacity !== undefined && transform.opacity !== 1) {
-        transformFilters.push(`format=rgba,colorchannelmixer=aa=${transform.opacity}`);
-      }
-      
-      if (transformFilters.length > 0) {
-        imageFilter += transformFilters.join(',');
-      }
-      
-      imageFilter += `[img${overlayIndex}]`;
-      console.log(`[Image Overlay ${overlayIndex}] Using manual filters:`, imageFilter);
+    const transformFilters = [];
+    let usedScale = null;
+    let usedWidth = null;
+    let usedHeight = null;
+
+    // 1. Luôn convert sang RGBA để pad nền trong suốt
+    transformFilters.push('format=rgba');
+    // 2. Pad thành canvas đủ lớn với nền trong suốt
+    transformFilters.push(`pad=${diagonal}:${diagonal}:(ow-iw)/2:(oh-ih)/2:color=#00000000`);
+    // 3. Xoay overlay trên canvas đã pad
+    const overlayRotation = (typeof overlay.rotation === 'number') ? overlay.rotation : (transform?.rotation || 0);
+    if (overlayRotation) {
+      // Xoay quanh tâm, vùng dư cũng trong suốt
+      transformFilters.push(`rotate=${overlayRotation}*PI/180:ow=rotw(iw):oh=roth(ih):c=#00000000`);
     }
-    
+    // 4. Scale overlay (nếu có scaleInfo.finalScale hoặc scale)
+    if (scaleInfo && scaleInfo.finalScale !== undefined) {
+      usedScale = scaleInfo.finalScale;
+      transformFilters.push(`scale=iw*${usedScale}:ih*${usedScale}`);
+    } else if (typeof scale === 'number' && scale !== 1) {
+      transformFilters.push(`scale=iw*${scale}:ih*${scale}`);
+    }
+    // 5. Opacity (nếu có)
+    const overlayOpacity = (typeof overlay.opacity === 'number') ? overlay.opacity : (transform?.opacity);
+    if (overlayOpacity !== undefined && overlayOpacity !== 1) {
+      transformFilters.push('format=rgba'); // Đảm bảo có alpha
+      transformFilters.push(`colorchannelmixer=aa=${overlayOpacity}`);
+    }
+    // Kết hợp các filter lại
+    if (transformFilters.length > 0) {
+      imageFilter += transformFilters.join(',');
+    }
+    imageFilter += `[img${overlayIndex}]`;
     // Tạo overlay filter
     let overlayFilter = `${currentVideoStream}[img${overlayIndex}]overlay=${outputPosition.x}:${outputPosition.y}`;
-    
-    // Thêm timing nếu có
     if (timing && (timing.start > 0 || timing.end < 999)) {
       overlayFilter += `:enable='between(t,${timing.start || 0},${timing.end || 5})'`;
     }
-    
     overlayFilter += `[${nextLabel}]`;
-    
     const fullFilter = `${imageFilter};${overlayFilter}`;
-    
+    // Log chi tiết để debug
     console.log(`[Image Overlay ${overlayIndex}] Filter created:`, fullFilter);
-    
+    console.log(`[Image Overlay ${overlayIndex}] Debug info:`, {
+      width,
+      height,
+      diagonal,
+      usedScale,
+      originalDimensions: overlay.originalDimensions,
+      scaleInfo,
+      transform,
+      position,
+      outputPosition,
+      previewDimensions,
+      outputDimensions
+    });
     return {
       filter: fullFilter,
       outputStream: `[${nextLabel}]`,
       inputs: [imagePath]
     };
-
   } catch (error) {
     console.error(`Error processing image overlay:`, error);
     return null;
@@ -1346,10 +1455,21 @@ const convertCoordinatesToFFmpeg = (position, previewDimensions, outputDimension
 };
 
 // Hàm xử lý các overlay trong một scene
-const processSceneOverlays = async (scene, sceneIndex, ffmpeg, hasAspectRatioFilter = false) => {
+const processSceneOverlays = async (scene, sceneIndex, ffmpeg, inputStream = '[scaled]') => {
   try {
     console.log(`[Scene ${sceneIndex}] Starting overlay processing`);
     console.log(`[Scene ${sceneIndex}] Scene data:`, scene);
+    console.log(`[Scene ${sceneIndex}] Overlays count:`, scene.overlays?.length || 0);
+    if (scene.overlays) {
+      scene.overlays.forEach((overlay, idx) => {
+        console.log(`[Scene ${sceneIndex}] Overlay ${idx}:`, {
+          type: overlay.type,
+          content: overlay.content,
+          source: overlay.source,
+          position: overlay.position
+        });
+      });
+    }
     
     if (!scene.overlays || scene.overlays.length === 0) {
       console.log(`[Scene ${sceneIndex}] No overlays found`);
@@ -1392,12 +1512,13 @@ const processSceneOverlays = async (scene, sceneIndex, ffmpeg, hasAspectRatioFil
     console.log(`[Scene ${sceneIndex}] Dimensions:`, {
       outputDimensions,
       previewDimensions,
-      scaleRatio: outputDimensions.width / previewDimensions.width
+      scaleRatio: outputDimensions.width / previewDimensions.width,
+      hasSceneDimensions: !!(scene.outputDimensions && scene.previewDimensions)
     });
     
     let allFilters = [];
-    // Nếu có aspect ratio filter, sử dụng [scaled] làm input, nếu không thì [0:v]
-    let currentVideoStream = hasAspectRatioFilter ? '[scaled]' : '[0:v]';
+    // Sử dụng inputStream làm input đầu vào cho overlay đầu tiên
+    let currentVideoStream = inputStream;
     let ffmpegInputs = [];
     
     // Tính toán input index bắt đầu cho overlay images
@@ -1410,18 +1531,19 @@ const processSceneOverlays = async (scene, sceneIndex, ffmpeg, hasAspectRatioFil
     // Xử lý từng overlay theo thứ tự đã sắp xếp
     for (let i = 0; i < sortedOverlays.length; i++) {
       const overlay = sortedOverlays[i];
+      const isLast = (i === sortedOverlays.length - 1);
+      const nextLabel = isLast ? 'outv' : `v${i}`;
+      let currentInputIndex = nextInputIndex;
       
       console.log(`[Scene ${sceneIndex}] Processing overlay ${i + 1}/${sortedOverlays.length}:`, {
         type: overlay.type,
         zIndex: overlay.zIndex || 0,
         position: overlay.position,
-        timing: overlay.timing
+        timing: overlay.timing,
+        hasScaleInfo: !!overlay.scaleInfo
       });
       
       try {
-        // Sử dụng nextInputIndex cho overlay hiện tại
-        let currentInputIndex = nextInputIndex;
-        
         const result = await processIndividualOverlay(
           overlay, 
           i, 
@@ -1431,7 +1553,7 @@ const processSceneOverlays = async (scene, sceneIndex, ffmpeg, hasAspectRatioFil
           outputDimensions,
           previewDimensions,
           currentVideoStream,
-          i === sortedOverlays.length - 1 // isLast
+          nextLabel // truyền nextLabel động
         );
         
         console.log(`[Scene ${sceneIndex}] Overlay ${i} processed with inputIndex ${currentInputIndex}, hasAudio: ${hasAudio}`);
@@ -1444,10 +1566,7 @@ const processSceneOverlays = async (scene, sceneIndex, ffmpeg, hasAspectRatioFil
             nextInputIndex += result.inputs.length;
           }
           
-          if (result.outputStream) {
-            currentVideoStream = result.outputStream;
-          }
-          
+          currentVideoStream = `[${nextLabel}]`;
         }
       } catch (error) {
         console.error(`[Scene ${sceneIndex}] Error processing overlay ${i}:`, error);
@@ -1474,184 +1593,60 @@ const processSceneOverlays = async (scene, sceneIndex, ffmpeg, hasAspectRatioFil
   }
 };
 
-// Hàm tạo filter cho text overlay
-// const createTextOverlayFilter = async (overlay, index) => {
-//   try {
-//     const { content, position, style } = overlay;
-//     const { x, y } = position;
-//     const { color, fontSize, fontFamily } = style;
-    
-//     const escapedContent = content.replace(/'/g, "\\'");
-//     const actualFontSize = fontSize || 24;
-//     const hexColor = color?.replace('#', '') || 'FFFFFF';
-    
-//     const boxOpacity = 0.5;
-//     const borderWidth = 5;
-//     const shadowX = 2;
-//     const shadowY = 2;
-//     const shadowOpacity = 0.4;
-    
-//     let textExpression = `drawtext=text='${escapedContent}'`;
-    
-//     // Thêm vị trí
-//     textExpression += `:x=${x}:y=${y}`;
-    
-//     // Thêm font và kích thước
-//     textExpression += `:fontsize=${actualFontSize}`;
-//     textExpression += `:fontfile=arial.ttf`;
-    
-//     // Thêm màu chữ
-//     textExpression += `:fontcolor=0x${hexColor}`;
-    
-//     // Thêm box và border
-//     textExpression += `:box=1`;
-//     textExpression += `:boxcolor=black@${boxOpacity}`;
-//     textExpression += `:boxborderw=${borderWidth}`;
-    
-//     // Thêm shadow
-//     textExpression += `:shadowx=${shadowX}`;
-//     textExpression += `:shadowy=${shadowY}`;
-//     textExpression += `:shadowcolor=black@${shadowOpacity}`;
-    
-//     // Xử lý animation nếu có
-//     if (overlay.animation) {
-//       const { type, duration, delay } = overlay.animation;
-      
-//       switch (type) {
-//         case 'fade':
-//           const fadeIn = overlay.animation.fadeIn || 1;
-//           const fadeOut = overlay.animation.fadeOut;
-          
-//           if (fadeIn > 0) {
-//             textExpression += `:enable='between(t,${delay},${delay + duration})'`;
-//             textExpression += `:alpha='if(lt(t,${delay}),0,if(lt(t,${delay + fadeIn}),(t-${delay})/${fadeIn},`;
-            
-//             if (fadeOut > 0 && duration > fadeOut) {
-//               const fadeOutStart = duration - fadeOut;
-//               textExpression += `if(lt(t,${delay + fadeOutStart}),1,(${delay + duration}-t)/${fadeOut})))'`;
-//             } else {
-//               textExpression += `1))'`;
-//             }
-//           }
-//           break;
-          
-//         case 'slide':
-//           const direction = overlay.animation.direction || 'left';
-//           const slideSpeed = overlay.animation.speed || 1;
-          
-//           if (direction === 'left') {
-//             textExpression += `:x='if(lt(t,${delay}),w,max(${x},w-(t-${delay})*${slideSpeed*100}))'`;
-//           } else if (direction === 'right') {
-//             textExpression += `:x='if(lt(t,${delay}),-w,min(${x},(t-${delay})*${slideSpeed*100}-w))'`;
-//           } else if (direction === 'top') {
-//             textExpression += `:y='if(lt(t,${delay}),-h,min(${y},(t-${delay})*${slideSpeed*100}-h))'`;
-//           } else if (direction === 'bottom') {
-//             textExpression += `:y='if(lt(t,${delay}),h,max(${y},h-(t-${delay})*${slideSpeed*100}))'`;
-//           }
-//           break;
-//       }
-//     }
-    
-//     console.log(`[Text Overlay ${index}] Created filter with content: "${escapedContent}", position: (${x}, ${y}), size: ${actualFontSize}`);
-//     return textExpression;
-//   } catch (error) {
-//     console.error(`[Text Overlay ${index}] Error creating filter:`, error);
-//     return null;
-//   }
-// };
 
-// Hàm tạo filter cho sticker overlay
-const createStickerOverlayFilter = async (overlay, index) => {
-  try {
-    const { content, position, transform } = overlay;
-    const { x, y } = position;
-    const { scale, rotation } = transform;
-    
-    // Tạo file tạm cho sticker
-    const stickerPath = `sticker_${index}.png`;
-    // TODO: Xử lý chuyển đổi sticker content thành file ảnh
-    
-    const stickerExpression = `movie=${stickerPath}` +
-                            `,scale=iw*${scale}:ih*${scale}` +
-                            `,rotate=${rotation}*PI/180` +
-                            `[sticker${index}];` +
-                            `[0:v][sticker${index}]overlay=${x}:${y}`;
-    
-    console.log(`[Sticker Overlay ${index}] Created filter with position: ${x}, ${y}, scale: ${scale}, rotation: ${rotation}`);
-    return stickerExpression;
-  } catch (error) {
-    console.error(`[Sticker Overlay ${index}] Error creating filter:`, error);
-    return null;
-  }
-};
 
 // Hàm tạo filter cho text overlay toàn cục
-const createGlobalTextOverlayFilter = async (overlay, index) => {
+const createGlobalTextOverlayFilter = async (overlay, nextLabel, ffmpeg) => {
   try {
     const { content: overlayContent, position: overlayPosition, style: overlayStyle, dimensions } = overlay;
     const { color, fontSize, background, backgroundColor, backgroundOpacity, outline, outlineColor, outlineWidth, shadow, shadowColor, shadowX, shadowY, shadowOpacity } = overlayStyle;
     
+    console.log(`[Global Text Overlay] Processing:`, {
+      content: overlayContent,
+      position: overlayPosition,
+      style: overlayStyle,
+      nextLabel
+    });
     const actualFontSize = fontSize || 24;
     const hexColor = convertColorToHex(color);
-    
-    // Đặt label cho output stream
-    const outLabel = `v${index}`;
-    
     let yPosition;
     switch (overlayPosition) {
-      case 'top':
-        yPosition = 'h*0.1';
-        break;
-      case 'center':
-        yPosition = '(h-text_h)/2';
-        break;
-      case 'bottom':
-        yPosition = 'h*0.9-text_h';
-        break;
-      default:
-        yPosition = 'h*0.9-text_h';
+      case 'top': yPosition = 'h*0.1'; break;
+      case 'center': yPosition = '(h-text_h)/2'; break;
+      case 'bottom': yPosition = 'h*0.9-text_h'; break;
+      default: yPosition = 'h*0.9-text_h';
     }
-
-    console.log('Original content:', overlayContent);
-    
-    // Sử dụng formatTextForVideo để xử lý text tự động
-    const videoWidth = 854; // Kích thước video mặc định
+    const videoWidth = dimensions?.output?.width || 854;
     const wrappedContent = formatTextForVideo(overlayContent, videoWidth, actualFontSize, 20);
-    console.log('Formatted content:', wrappedContent);
-
-      
-    // Chỉ tạo drawtext filter, không bao gồm input stream
-    let textExpression = `drawtext=text='${wrappedContent}'` +
-                    `:x=(w-text_w)/2:y=${yPosition}` +
-                    `:fontsize=${actualFontSize}` +
-                    `:fontfile=arial.ttf` +
-                    `:fontcolor=0x${hexColor}`;
+    const globalTextLabel = `globaltext${Date.now()}`; // Tạo label duy nhất
     
-    // Thêm background nếu được bật
+    // Sử dụng textfile thay vì text để tránh xung đột
+    const globalTextFileName = `globaltext_${Date.now()}.txt`;
+    await ffmpeg.writeFile(globalTextFileName, new TextEncoder().encode(wrappedContent));
+    
+    let textExpression = `drawtext=textfile='${globalTextFileName}'` +
+      `:x=(w-text_w)/2:y=${yPosition}` +
+      `:fontsize=${actualFontSize}` +
+      `:fontfile=arial.ttf` +
+      `:fontcolor=0x${hexColor}`;
     if (background && backgroundColor) {
       const hexBgColor = convertColorToHex(backgroundColor);
       textExpression += `:box=1:boxcolor=0x${hexBgColor}@${backgroundOpacity || 0.5}:boxborderw=5`;
     }
-    
-    // Thêm outline nếu được bật
     if (outline && outlineColor) {
       const hexOutlineColor = convertColorToHex(outlineColor);
       textExpression += `:borderw=${outlineWidth || 2}:bordercolor=0x${hexOutlineColor}`;
     }
-    
-    // Thêm shadow nếu được bật
     if (shadow && shadowColor) {
       const hexShadowColor = convertColorToHex(shadowColor);
       textExpression += `:shadowx=${shadowX || 2}:shadowy=${shadowY || 2}:shadowcolor=0x${hexShadowColor}@${shadowOpacity || 0.4}`;
     }
+    textExpression += `[${globalTextLabel}];[${globalTextLabel}]null[${nextLabel}]`;
     
-    // Thêm output label
-    textExpression += `[${outLabel}]`;
+    console.log(`[Global Text Overlay] Created filter:`, textExpression);
     
-    console.log(`[Global Text Overlay ${index}] Created filter with content: "${overlayContent}", position: ${overlayPosition}`);
     return textExpression;
   } catch (error) {
-    console.error(`[Global Text Overlay ${index}] Error creating filter:`, error);
     return null;
   }
 };
@@ -1889,129 +1884,26 @@ const createTransitionPreview = (scenes, individualTransitions) => {
     totalDuration += sceneDuration;
   }
   
-  console.log(`Total video duration: ${totalDuration.toFixed(1)}s`);
-  console.log(`Active transitions: ${transitionInfo.length}`);
-  
-  return { totalDuration, transitionInfo };
+  console.log(`Total duration: ${totalDuration.toFixed(1)}s`);
+  return transitionInfo;
 };
 
-// Hàm test để kiểm tra aspect ratio handling
-export const testAspectRatioPreservation = async (ffmpeg, imageUrl, outputResolution = '854x480') => {
-  try {
-    console.log('=== TESTING ASPECT RATIO PRESERVATION ===');
-    
-    // Tải ảnh test
-    const imageResponse = await fetch(imageUrl);
-    if (!imageResponse.ok) {
-      throw new Error(`Failed to load test image: ${imageResponse.status}`);
+// Hàm lấy kích thước thực tế của ảnh overlay (hỗ trợ cả base64 và URL)
+const getImageDimensions = (src) => {
+  return new Promise((resolve, reject) => {
+    try {
+      const img = new Image();
+      img.onload = () => resolve({ width: img.width, height: img.height });
+      img.onerror = reject;
+      // Nếu là base64, cần tạo object URL
+      if (src.startsWith('data:')) {
+        img.src = src;
+      } else {
+        img.crossOrigin = 'Anonymous';
+        img.src = src;
+      }
+    } catch (e) {
+      reject(e);
     }
-    
-    const imageBlob = await imageResponse.blob();
-    const imageBuffer = await imageBlob.arrayBuffer();
-    await ffmpeg.writeFile('test_image.jpg', new Uint8Array(imageBuffer));
-    
-    // Lấy thông tin ảnh gốc
-    const probeCommand = ['-i', 'test_image.jpg', '-t', '1', '-f', 'null', '-'];
-    console.log('Probing image info...');
-    
-    const [targetWidth, targetHeight] = outputResolution.split('x').map(Number);
-    
-    // Test với aspect ratio preservation
-    const aspectRatioFilter = `scale=${targetWidth}:${targetHeight}:force_original_aspect_ratio=decrease,pad=${targetWidth}:${targetHeight}:(ow-iw)/2:(oh-ih)/2:black`;
-    
-    const testCommand = [
-      '-loop', '1',
-      '-i', 'test_image.jpg',
-      '-t', '2',
-      '-vf', aspectRatioFilter,
-      '-c:v', 'libx264',
-      '-preset', 'ultrafast',
-      '-crf', '28',
-      '-r', '15',
-      '-pix_fmt', 'yuv420p',
-      '-y',
-      'test_aspect_ratio.mp4'
-    ];
-    
-    console.log('Test command:', testCommand.join(' '));
-       console.log('Aspect ratio filter:', aspectRatioFilter);
-    
-    await ffmpeg.exec(testCommand);
-    
-    // Verify output
-    const outputFile = await ffmpeg.readFile('test_aspect_ratio.mp4');
-    
-    // Cleanup
-    await ffmpeg.deleteFile('test_image.jpg');
-    await ffmpeg.deleteFile('test_aspect_ratio.mp4');
-    
-    console.log('=== ASPECT RATIO TEST COMPLETED ===');
-    console.log(`Output size: ${outputFile.byteLength} bytes`);
-    console.log('✅ Aspect ratio preservation should now work correctly!');
-    
-    return new Blob([outputFile], { type: 'video/mp4' });
-    
-  } catch (error) {
-    console.error('Aspect ratio test failed:', error);
-    throw error;
-  }
-};
-
-// Hàm áp dụng các filter cho ảnh (scale, rotation, brightness, etc.)
-const applyImageFilters = (filters, inputStream = '[scaled]', outputStream = '[filtered]') => {
-  if (!filters || typeof filters !== 'object') {
-    return null;
-  }
-
-  const filterParts = [];
-  
-  // Scale filter
-  if (filters.scale && filters.scale !== 1) {
-    filterParts.push(`scale=iw*${filters.scale}:ih*${filters.scale}`);
-  }
-  
-  // Rotation filter (convert degrees to radians)
-  if (filters.rotation && filters.rotation !== 0) {
-    const radians = filters.rotation * Math.PI / 180;
-    filterParts.push(`rotate=${radians}`);
-  }
-  
-  // Brightness, contrast, saturation filter
-  const eqParts = [];
-  if (filters.brightness && filters.brightness !== 0) {
-    eqParts.push(`brightness=${filters.brightness}`);
-  }
-  if (filters.contrast && filters.contrast !== 1) {
-    eqParts.push(`contrast=${filters.contrast}`);
-  }
-  if (filters.saturation && filters.saturation !== 1) {
-    eqParts.push(`saturation=${filters.saturation}`);
-  }
-  if (filters.hue && filters.hue !== 0) {
-    eqParts.push(`hue=${filters.hue}`);
-  }
-  
-  if (eqParts.length > 0) {
-    filterParts.push(`eq=${eqParts.join(':')}`);
-  }
-  
-  // Blur filter
-  if (filters.blur && filters.blur > 0) {
-    filterParts.push(`boxblur=${filters.blur}`);
-  }
-  
-  // Opacity filter
-  if (filters.opacity && filters.opacity !== 1) {
-    filterParts.push(`format=rgba,colorchannelmixer=aa=${filters.opacity}`);
-  }
-  
-  if (filterParts.length === 0) {
-    return null;
-  }
-  
-  // Tạo filter string
-  const filterString = `${inputStream}${filterParts.join(',')},format=yuv420p${outputStream}`;
-  
-  console.log('Generated image filter:', filterString);
-  return filterString;
+  });
 };

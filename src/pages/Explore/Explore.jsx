@@ -4,6 +4,13 @@ import ItemCard from "../../components/ItemCard/ItemCard";
 import { searchVideos } from "../../services/videoSearchService";
 import { getTiktokTrendingKeywords, getYouTubeTrendingKeywords } from "../../services/trendingKeywordService";
 
+// Định nghĩa mảng keyword TikTok cứng
+const TIKTOK_KEYWORDS = [
+  "trending", "viral", "funny", "dance", "music",
+  "comedy", "food", "travel", "beauty", "fashion",
+  "gaming", "sports", "education", "lifestyle", "entertainment"
+];
+
 const Explore = () => {  
   // State quản lý input và file - tạm thời comment out vì chưa sử dụng
   // const [prompt, setPrompt] = useState("");
@@ -90,10 +97,10 @@ const Explore = () => {
   // const [trendingVideos, setTrendingVideos] = useState([]); // tạm thời comment
   // const [trendHints, setTrendHints] = useState([]); // tạm thời comment
   const [platformKeywords, setPlatformKeywords] = useState({
-    tiktok: savedKeywords?.tiktok || [],
+    tiktok: TIKTOK_KEYWORDS,
     youtube: savedKeywords?.youtube || [],
     loading: {
-      tiktok: !savedKeywords?.tiktok,
+      tiktok: false,
       youtube: !savedKeywords?.youtube
     }
   });
@@ -107,15 +114,11 @@ const Explore = () => {
 
   // Load trending keywords khi component mount
   useEffect(() => {
-    // Chỉ load TikTok keywords nếu chưa có trong storage
-    if (!savedKeywords?.tiktok) {
-      loadTikTokKeywords();
-    }
-
     // Chỉ load YouTube keywords nếu chưa có trong storage
     if (!savedKeywords?.youtube) {
       loadYouTubeKeywords();
     }
+    // TikTok luôn dùng mảng cứng, không cần load
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Chỉ chạy 1 lần khi mount
 
@@ -128,26 +131,12 @@ const Explore = () => {
     // Reset loading state
     setPlatformKeywords(prev => ({
       ...prev,
-      loading: { tiktok: true, youtube: true }
+      tiktok: TIKTOK_KEYWORDS,
+      youtube: [],
+      loading: { tiktok: false, youtube: true }
     }));
-    
-    // Load lại keywords
-    loadTikTokKeywords();
+    // Load lại YouTube keywords
     loadYouTubeKeywords();
-  };
-
-  // Hàm load TikTok keywords
-  const loadTikTokKeywords = () => {
-    // hiển thị mảng cứng
-    setPlatformKeywords(prev => ({
-      ...prev,
-      tiktok: [
-        "trending", "viral", "funny", "dance", "music",
-        "comedy", "food", "travel", "beauty", "fashion",
-        "gaming", "sports", "education", "lifestyle", "entertainment"
-      ],
-      loading: { ...prev.loading, tiktok: false }
-    }));
   };
 
   // Hàm load YouTube keywords

@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import TimelineUI from './TimelineUI';
+import VideoEditor from './VideoEditor';
 import { initFFmpeg, generateVideoFromScript, createSimpleVideo } from '../../../utils/ffmpegUtils';
 import { toast } from 'react-toastify';
 import { projectService } from '../../../services/projectService';
+import { FFmpeg } from '@ffmpeg/ffmpeg';
 
 const VideoGenerator = ({ content = [], onBack, scriptId: propScriptId, script, ...otherProps }) => {
   console.log('VideoGenerator props:', { content, onBack, propScriptId, script, otherProps });
@@ -36,15 +37,17 @@ const VideoGenerator = ({ content = [], onBack, scriptId: propScriptId, script, 
     const loadFFmpeg = async () => {
       try {
         const ffmpegInstance = await initFFmpeg();
-        if (ffmpegInstance) {
+        if (ffmpegInstance && ffmpegInstance instanceof FFmpeg) {
           setFFmpeg(ffmpegInstance);
-        setIsFFmpegLoaded(true);
+          setIsFFmpegLoaded(true);
         } else {
-          setError('Unable to initialize FFmpeg');
+          setError('FFmpeg instance is invalid!');
+          setFFmpeg(null);
         }
       } catch (error) {
         console.error('Lỗi khi tải FFmpeg:', error);
         setError('Unable to load FFmpeg: ' + error.message);
+        setFFmpeg(null);
       }
     };
 
@@ -168,29 +171,23 @@ const VideoGenerator = ({ content = [], onBack, scriptId: propScriptId, script, 
         setVideoUrl(null);
       }
       
-      if (!ffmpeg) {
-        setError('FFmpeg not loaded');
+      if (!ffmpeg || !(ffmpeg instanceof FFmpeg)) {
+        setError('FFmpeg is not loaded or invalid!');
         return;
       }
-      
-      // Ưu tiên sử dụng currentScript (có thể từ backend) nếu có
-      let script = currentScript;
-      
-      // Nếu không có currentScript, mới tạo script từ TimelineUI
-      if (!script) {
-        const timelineRef = document.querySelector('.timeline-component');
-        if (timelineRef) {
-          try {
-          const generatedScript = await timelineRef.generateAndExportScript();
-          if (generatedScript) {
-            script = generatedScript;
-          }
+
+      // LUÔN tạo script mới từ TimelineUI mỗi lần bấm nút
+      const timelineRef = document.querySelector('.timeline-component');
+      let script = null;
+      if (timelineRef && timelineRef.generateAndExportScript) {
+        try {
+          script = await timelineRef.generateAndExportScript();
+          setCurrentScript(script); // Lưu lại script mới nhất nếu muốn
         } catch (scriptError) {
           console.error('Lỗi khi tạo script:', scriptError);
-          }
         }
       }
-      
+      // Nếu không có hàm generateAndExportScript trên element, báo lỗi
       if (!script) {
         setError('No script available to create video');
         return;
@@ -229,11 +226,11 @@ const VideoGenerator = ({ content = [], onBack, scriptId: propScriptId, script, 
       const url = URL.createObjectURL(videoBlob);
       setVideoUrl(url);
       
-      // Tạo URL để tải xuống video
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `video_${new Date().toISOString().slice(0, 10)}.mp4`;
-      a.click();
+      // // Tạo URL để tải xuống video
+      // const a = document.createElement('a');
+      // a.href = url;
+      // a.download = `video_${new Date().toISOString().slice(0, 10)}.mp4`;
+      // a.click();
 
     } catch (error) {
       console.error('Error creating video:', error);
@@ -306,12 +303,11 @@ const VideoGenerator = ({ content = [], onBack, scriptId: propScriptId, script, 
 
       const { public_url, signed_url } = await uploadResponse.json();
       setVideoDownloadUrl(signed_url);
-      toast.success('✅ Completed! Video has been saved to the system.');
       
       // Bước 3: Upload URL lên database
       console.log('Saving video information to database...');
       await updateVideoLinkInDB(signed_url);
-      toast.success('✅ Hoàn thành! Video đã được lưu vào hệ thống.');
+      toast.success('✅ Completed! Video has been saved to the system.');
 
     } catch (err) {
       console.error(err);
@@ -396,12 +392,12 @@ const VideoGenerator = ({ content = [], onBack, scriptId: propScriptId, script, 
         <div className="relative">
           {(() => {
             const scriptId = getScriptId();
-            console.log('Rendering TimelineUI with scriptId:', scriptId);
+            console.log('Rendering VideoEditor with scriptId:', scriptId);    
             return (
-              <TimelineUI 
+              <VideoEditor 
                 content={content} 
                 onExportScript={handleExportScript}
-                ffmpeg={ffmpeg}
+                ffmpeg={ffmpeg && ffmpeg instanceof FFmpeg ? ffmpeg : null}
                 scriptId={scriptId}
               />
             );
