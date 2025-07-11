@@ -1,6 +1,35 @@
-import React from "react";
+import React, { useCallback, useEffect } from "react";
+import BackgroundMusicSelector from "./BackgroundMusicSelector";
 
-const VideoSettingsPanel = ({ videoSettings, setVideoSettings }) => {
+const VideoSettingsPanel = ({ videoSettings, setVideoSettings, ffmpeg }) => {
+  // Debug log để kiểm tra background music enabled
+  console.log(
+    "VideoSettings backgroundMusicEnabled:",
+    videoSettings.backgroundMusicEnabled
+  );
+
+  // Sử dụng useCallback để tránh re-create function
+  const handleToggleBackgroundMusic = useCallback(
+    (enabled) => {
+      console.log("Background music toggle:", enabled);
+      setVideoSettings((prev) => {
+        console.log("Previous state:", prev.backgroundMusicEnabled);
+        const newState = { ...prev, backgroundMusicEnabled: enabled };
+        console.log("New state:", newState.backgroundMusicEnabled);
+        return newState;
+      });
+    },
+    [setVideoSettings]
+  );
+
+  // Monitor state changes
+  useEffect(() => {
+    console.log(
+      "VideoSettings backgroundMusicEnabled changed to:",
+      videoSettings.backgroundMusicEnabled
+    );
+  }, [videoSettings.backgroundMusicEnabled]);
+
   return (
     <div className="bg-gray-800/50 p-3 rounded-lg border border-gray-600">
       <div className="flex items-center justify-between mb-3">
@@ -18,7 +47,12 @@ const VideoSettingsPanel = ({ videoSettings, setVideoSettings }) => {
           </label>
           <select
             value={videoSettings.resolution}
-            onChange={e => setVideoSettings(prev => ({ ...prev, resolution: e.target.value }))}
+            onChange={(e) =>
+              setVideoSettings((prev) => ({
+                ...prev,
+                resolution: e.target.value,
+              }))
+            }
             className="w-full bg-gray-700 text-white rounded p-1.5 text-xs border border-gray-600 focus:border-blue-500 focus:outline-none"
           >
             <option value="1920x1080">1080p</option>
@@ -33,7 +67,12 @@ const VideoSettingsPanel = ({ videoSettings, setVideoSettings }) => {
           </label>
           <select
             value={videoSettings.fps}
-            onChange={e => setVideoSettings(prev => ({ ...prev, fps: Number(e.target.value) }))}
+            onChange={(e) =>
+              setVideoSettings((prev) => ({
+                ...prev,
+                fps: Number(e.target.value),
+              }))
+            }
             className="w-full bg-gray-700 text-white rounded p-1.5 text-xs border border-gray-600 focus:border-blue-500 focus:outline-none"
           >
             <option value="24">24</option>
@@ -48,7 +87,9 @@ const VideoSettingsPanel = ({ videoSettings, setVideoSettings }) => {
           </label>
           <select
             value={videoSettings.preset}
-            onChange={e => setVideoSettings(prev => ({ ...prev, preset: e.target.value }))}
+            onChange={(e) =>
+              setVideoSettings((prev) => ({ ...prev, preset: e.target.value }))
+            }
             className="w-full bg-gray-700 text-white rounded p-1.5 text-xs border border-gray-600 focus:border-blue-500 focus:outline-none"
           >
             <option value="ultrafast">Fast</option>
@@ -67,7 +108,12 @@ const VideoSettingsPanel = ({ videoSettings, setVideoSettings }) => {
               min="0"
               max="51"
               value={videoSettings.crf}
-              onChange={e => setVideoSettings(prev => ({ ...prev, crf: Number(e.target.value) }))}
+              onChange={(e) =>
+                setVideoSettings((prev) => ({
+                  ...prev,
+                  crf: Number(e.target.value),
+                }))
+              }
               className="flex-1"
             />
             <span className="text-xs text-gray-300 min-w-[2rem] text-center">
@@ -76,6 +122,64 @@ const VideoSettingsPanel = ({ videoSettings, setVideoSettings }) => {
           </div>
         </div>
       </div>
+      {/* Background Music Section */}
+      <div className="space-y-4">
+        {videoSettings.backgroundMusicEnabled && (
+          <div className="space-y-4">
+            <BackgroundMusicSelector
+              isEnabled={videoSettings.backgroundMusicEnabled}
+              selectedMusic={videoSettings.backgroundMusic}
+              volume={videoSettings.backgroundMusicVolume}
+              onMusicSelect={(music) => {
+                setVideoSettings((prev) => ({
+                  ...prev,
+                  backgroundMusic: music,
+                }));
+              }}
+              onVolumeChange={(volume) => {
+                setVideoSettings((prev) => ({
+                  ...prev,
+                  backgroundMusicVolume: volume,
+                }));
+              }}
+              onToggleEnabled={(enabled) => {
+                setVideoSettings((prev) => ({
+                  ...prev,
+                  backgroundMusicEnabled: enabled,
+                }));
+              }}
+            />
+          </div>
+        )}
+
+        {/* Hiển thị BackgroundMusicSelector ngay cả khi disabled để có thể bật */}
+        {!videoSettings.backgroundMusicEnabled && (
+          <BackgroundMusicSelector
+            isEnabled={videoSettings.backgroundMusicEnabled}
+            selectedMusic={videoSettings.backgroundMusic}
+            volume={videoSettings.backgroundMusicVolume}
+            onMusicSelect={(music) => {
+              setVideoSettings((prev) => ({
+                ...prev,
+                backgroundMusic: music,
+              }));
+            }}
+            onVolumeChange={(volume) => {
+              setVideoSettings((prev) => ({
+                ...prev,
+                backgroundMusicVolume: volume,
+              }));
+            }}
+            onToggleEnabled={(enabled) => {
+              setVideoSettings((prev) => ({
+                ...prev,
+                backgroundMusicEnabled: enabled,
+              }));
+            }}
+          />
+        )}
+      </div>
+
       {/* Overlay - Luôn hiển thị */}
       <div className="space-y-3 mt-3">
         {/* Text Overlay */}
@@ -85,7 +189,12 @@ const VideoSettingsPanel = ({ videoSettings, setVideoSettings }) => {
               <input
                 type="checkbox"
                 checked={videoSettings.textOverlay}
-                onChange={e => setVideoSettings(prev => ({ ...prev, textOverlay: e.target.checked }))}
+                onChange={(e) =>
+                  setVideoSettings((prev) => ({
+                    ...prev,
+                    textOverlay: e.target.checked,
+                  }))
+                }
                 className="form-checkbox w-4 h-4"
               />
               <span className="text-sm text-white font-medium">Subtitle</span>
@@ -96,10 +205,17 @@ const VideoSettingsPanel = ({ videoSettings, setVideoSettings }) => {
               {/* Vị trí và màu sắc cơ bản */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs text-gray-400 mb-1">Position</label>
+                  <label className="block text-xs text-gray-400 mb-1">
+                    Position
+                  </label>
                   <select
                     value={videoSettings.textPosition}
-                    onChange={e => setVideoSettings(prev => ({ ...prev, textPosition: e.target.value }))}
+                    onChange={(e) =>
+                      setVideoSettings((prev) => ({
+                        ...prev,
+                        textPosition: e.target.value,
+                      }))
+                    }
                     className="w-full bg-gray-700 text-white rounded p-1.5 text-xs border border-gray-600 focus:border-blue-500 focus:outline-none"
                   >
                     <option value="top">Top</option>
@@ -108,24 +224,38 @@ const VideoSettingsPanel = ({ videoSettings, setVideoSettings }) => {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs text-gray-400 mb-1">Text color</label>
+                  <label className="block text-xs text-gray-400 mb-1">
+                    Text color
+                  </label>
                   <input
                     type="color"
                     value={videoSettings.textColor}
-                    onChange={e => setVideoSettings(prev => ({ ...prev, textColor: e.target.value }))}
+                    onChange={(e) =>
+                      setVideoSettings((prev) => ({
+                        ...prev,
+                        textColor: e.target.value,
+                      }))
+                    }
                     className="w-full h-8 rounded cursor-pointer border border-gray-600"
                   />
                 </div>
               </div>
               {/* Kích thước */}
               <div>
-                <label className="block text-xs text-gray-400 mb-1">Size ({videoSettings.textSize}px)</label>
+                <label className="block text-xs text-gray-400 mb-1">
+                  Size ({videoSettings.textSize}px)
+                </label>
                 <input
                   type="range"
                   min="12"
                   max="48"
                   value={videoSettings.textSize}
-                  onChange={e => setVideoSettings(prev => ({ ...prev, textSize: Number(e.target.value) }))}
+                  onChange={(e) =>
+                    setVideoSettings((prev) => ({
+                      ...prev,
+                      textSize: Number(e.target.value),
+                    }))
+                  }
                   className="w-full"
                 />
               </div>
@@ -136,33 +266,54 @@ const VideoSettingsPanel = ({ videoSettings, setVideoSettings }) => {
                   <input
                     type="checkbox"
                     checked={videoSettings.textBackground}
-                    onChange={e => setVideoSettings(prev => ({ ...prev, textBackground: e.target.checked }))}
+                    onChange={(e) =>
+                      setVideoSettings((prev) => ({
+                        ...prev,
+                        textBackground: e.target.checked,
+                      }))
+                    }
                     className="form-checkbox w-3 h-3"
                   />
                 </div>
                 {videoSettings.textBackground && (
                   <div className="grid grid-cols-2 gap-2">
                     <div>
-                      <label className="block text-xs text-gray-500 mb-1">Color</label>
+                      <label className="block text-xs text-gray-500 mb-1">
+                        Color
+                      </label>
                       <input
                         type="color"
                         value={videoSettings.textBackgroundColor}
-                        onChange={e => setVideoSettings(prev => ({ ...prev, textBackgroundColor: e.target.value }))}
+                        onChange={(e) =>
+                          setVideoSettings((prev) => ({
+                            ...prev,
+                            textBackgroundColor: e.target.value,
+                          }))
+                        }
                         className="w-full h-6 rounded cursor-pointer"
                       />
                     </div>
                     <div>
-                      <label className="block text-xs text-gray-500 mb-1">Opacity</label>
+                      <label className="block text-xs text-gray-500 mb-1">
+                        Opacity
+                      </label>
                       <input
                         type="range"
                         min="0"
                         max="1"
                         step="0.1"
                         value={videoSettings.textBackgroundOpacity}
-                        onChange={e => setVideoSettings(prev => ({ ...prev, textBackgroundOpacity: Number(e.target.value) }))}
+                        onChange={(e) =>
+                          setVideoSettings((prev) => ({
+                            ...prev,
+                            textBackgroundOpacity: Number(e.target.value),
+                          }))
+                        }
                         className="w-full"
                       />
-                      <span className="text-xs text-gray-400">{videoSettings.textBackgroundOpacity}</span>
+                      <span className="text-xs text-gray-400">
+                        {videoSettings.textBackgroundOpacity}
+                      </span>
                     </div>
                   </div>
                 )}
@@ -174,32 +325,53 @@ const VideoSettingsPanel = ({ videoSettings, setVideoSettings }) => {
                   <input
                     type="checkbox"
                     checked={videoSettings.textOutline}
-                    onChange={e => setVideoSettings(prev => ({ ...prev, textOutline: e.target.checked }))}
+                    onChange={(e) =>
+                      setVideoSettings((prev) => ({
+                        ...prev,
+                        textOutline: e.target.checked,
+                      }))
+                    }
                     className="form-checkbox w-3 h-3"
                   />
                 </div>
                 {videoSettings.textOutline && (
                   <div className="grid grid-cols-2 gap-2">
                     <div>
-                      <label className="block text-xs text-gray-500 mb-1">Outline color</label>
+                      <label className="block text-xs text-gray-500 mb-1">
+                        Outline color
+                      </label>
                       <input
                         type="color"
                         value={videoSettings.textOutlineColor}
-                        onChange={e => setVideoSettings(prev => ({ ...prev, textOutlineColor: e.target.value }))}
+                        onChange={(e) =>
+                          setVideoSettings((prev) => ({
+                            ...prev,
+                            textOutlineColor: e.target.value,
+                          }))
+                        }
                         className="w-full h-6 rounded cursor-pointer"
                       />
                     </div>
                     <div>
-                      <label className="block text-xs text-gray-500 mb-1">Width</label>
+                      <label className="block text-xs text-gray-500 mb-1">
+                        Width
+                      </label>
                       <input
                         type="range"
                         min="1"
                         max="5"
                         value={videoSettings.textOutlineWidth}
-                        onChange={e => setVideoSettings(prev => ({ ...prev, textOutlineWidth: Number(e.target.value) }))}
+                        onChange={(e) =>
+                          setVideoSettings((prev) => ({
+                            ...prev,
+                            textOutlineWidth: Number(e.target.value),
+                          }))
+                        }
                         className="w-full"
                       />
-                      <span className="text-xs text-gray-400">{videoSettings.textOutlineWidth}px</span>
+                      <span className="text-xs text-gray-400">
+                        {videoSettings.textOutlineWidth}px
+                      </span>
                     </div>
                   </div>
                 )}
@@ -211,7 +383,12 @@ const VideoSettingsPanel = ({ videoSettings, setVideoSettings }) => {
                   <input
                     type="checkbox"
                     checked={videoSettings.textShadow}
-                    onChange={e => setVideoSettings(prev => ({ ...prev, textShadow: e.target.checked }))}
+                    onChange={(e) =>
+                      setVideoSettings((prev) => ({
+                        ...prev,
+                        textShadow: e.target.checked,
+                      }))
+                    }
                     className="form-checkbox w-3 h-3"
                   />
                 </div>
@@ -219,52 +396,86 @@ const VideoSettingsPanel = ({ videoSettings, setVideoSettings }) => {
                   <div className="space-y-2">
                     <div className="grid grid-cols-2 gap-2">
                       <div>
-                        <label className="block text-xs text-gray-500 mb-1">Shadow color</label>
+                        <label className="block text-xs text-gray-500 mb-1">
+                          Shadow color
+                        </label>
                         <input
                           type="color"
                           value={videoSettings.textShadowColor}
-                          onChange={e => setVideoSettings(prev => ({ ...prev, textShadowColor: e.target.value }))}
+                          onChange={(e) =>
+                            setVideoSettings((prev) => ({
+                              ...prev,
+                              textShadowColor: e.target.value,
+                            }))
+                          }
                           className="w-full h-6 rounded cursor-pointer"
                         />
                       </div>
                       <div>
-                        <label className="block text-xs text-gray-500 mb-1">Opacity</label>
+                        <label className="block text-xs text-gray-500 mb-1">
+                          Opacity
+                        </label>
                         <input
                           type="range"
                           min="0"
                           max="1"
                           step="0.1"
                           value={videoSettings.textShadowOpacity}
-                          onChange={e => setVideoSettings(prev => ({ ...prev, textShadowOpacity: Number(e.target.value) }))}
+                          onChange={(e) =>
+                            setVideoSettings((prev) => ({
+                              ...prev,
+                              textShadowOpacity: Number(e.target.value),
+                            }))
+                          }
                           className="w-full"
                         />
-                        <span className="text-xs text-gray-400">{videoSettings.textShadowOpacity}</span>
+                        <span className="text-xs text-gray-400">
+                          {videoSettings.textShadowOpacity}
+                        </span>
                       </div>
                     </div>
                     <div className="grid grid-cols-2 gap-2">
                       <div>
-                        <label className="block text-xs text-gray-500 mb-1">X position</label>
+                        <label className="block text-xs text-gray-500 mb-1">
+                          X position
+                        </label>
                         <input
                           type="range"
                           min="-5"
                           max="5"
                           value={videoSettings.textShadowX}
-                          onChange={e => setVideoSettings(prev => ({ ...prev, textShadowX: Number(e.target.value) }))}
+                          onChange={(e) =>
+                            setVideoSettings((prev) => ({
+                              ...prev,
+                              textShadowX: Number(e.target.value),
+                            }))
+                          }
                           className="w-full"
                         />
-                        <span className="text-xs text-gray-400">{videoSettings.textShadowX}px</span>
+                        <span className="text-xs text-gray-400">
+                          {videoSettings.textShadowX}px
+                        </span>
                       </div>
                       <div>
-                        <label className="block text-xs text-gray-500 mb-1">Y position</label>
+                        <label className="block text-xs text-gray-500 mb-1">
+                          Y position
+                        </label>
                         <input
                           type="range"
                           min="-5"
                           max="5"
                           value={videoSettings.textShadowY}
-                          onChange={e => setVideoSettings(prev => ({ ...prev, textShadowY: Number(e.target.value) }))}
+                          onChange={(e) =>
+                            setVideoSettings((prev) => ({
+                              ...prev,
+                              textShadowY: Number(e.target.value),
+                            }))
+                          }
                           className="w-full"
                         />
-                        <span className="text-xs text-gray-400">{videoSettings.textShadowY}px</span>
+                        <span className="text-xs text-gray-400">
+                          {videoSettings.textShadowY}px
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -278,4 +489,4 @@ const VideoSettingsPanel = ({ videoSettings, setVideoSettings }) => {
   );
 };
 
-export default VideoSettingsPanel; 
+export default VideoSettingsPanel;

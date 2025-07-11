@@ -260,7 +260,7 @@ const ScriptGenerator = ({ onNext, initialScript, initialIdea }) => {
       {/* Main Content */}
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_1.3fr] w-full h-full min-h-[600px] gap-8">
         {/* Left Column - Input Section */}
-        <div className="space-y-6 bg-gradient-to-br from-gray-800/50 to-gray-700/50 backdrop-blur-sm border border-gray-600/30 py-8 px-6 rounded-xl h-full flex flex-col flex-1 w-full">
+        <div className="space-y-6 bg-gradient-to-br from-gray-800/50 to-gray-700/50 backdrop-blur-sm border border-gray-600/30 py-8 px-6 rounded-xl h-full flex flex-col flex-1 w-full min-h-[600px]">
           {/* Section Header */}
           <div className="flex items-center space-x-3 mb-6">
             <div className="p-2 bg-gradient-to-r from-blue-600/20 to-blue-700/20 rounded-lg">
@@ -321,26 +321,30 @@ const ScriptGenerator = ({ onNext, initialScript, initialIdea }) => {
           </div>
 
           {/* Style Selection */}
-          <div className="space-y-3 flex-1">
+          <div className="space-y-3">
             <label className="block text-white font-semibold text-base flex items-center space-x-2">
               <svg className="w-5 h-5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zM21 5a2 2 0 00-2-2h-4a2 2 0 00-2 2v12a4 4 0 004 4h4a2 2 0 002-2V5z" />
               </svg>
               <span>Choose Script Style</span>
             </label>
-            <div className="grid grid-cols-1 gap-2 max-h-[300px] overflow-y-auto custom-scrollbar">
+            <div className="grid grid-cols-2 gap-2">
               {SCRIPT_STYLES.map((style) => (
                 <button
                   key={style.id}
                   onClick={() => setSelectedStyle(style)}
-                  className={`px-3 py-2 rounded-md border text-sm font-medium whitespace-nowrap transition-all duration-200 min-w-[110px] text-left
+                  className={`px-3 py-2 rounded-md border text-sm font-medium transition-all duration-200 text-left relative group
                     ${selectedStyle?.id === style.id
                       ? 'border-blue-500 bg-blue-500/10 text-blue-400'
                       : 'border-gray-600 bg-gray-700/50 hover:border-gray-500 text-white'}
                   `}
-                  title={style.description}
+                  // title={style.description}
                 >
                   <span className="font-semibold">{style.name}</span>
+                  {/* <span className="block text-xs text-gray-400 mt-1">{style.description}</span> */}
+                  {selectedStyle?.id === style.id && (
+                    <div className="absolute top-1 right-1 w-2 h-2 bg-blue-400 rounded-full"></div>
+                  )}
                 </button>
               ))}
             </div>
@@ -384,7 +388,7 @@ const ScriptGenerator = ({ onNext, initialScript, initialIdea }) => {
 
         {/* Right Column - Generated Script */}
         {generatedScript && (
-          <div className="bg-gray-800/50 py-6 px-3 rounded-xl h-full flex flex-col flex-1">
+          <div className="bg-gradient-to-br from-gray-800/50 to-gray-700/50 backdrop-blur-sm border border-gray-600/30 py-8 px-6 rounded-xl h-full flex flex-col flex-1 min-h-[600px]">
             <div className="flex justify-between items-center">
               <h3 className="text-lg font-semibold text-white">Generated Script</h3>
               <div className="flex gap-2">
@@ -404,7 +408,7 @@ const ScriptGenerator = ({ onNext, initialScript, initialIdea }) => {
             <textarea
               value={script}
               onChange={handleScriptEdit}
-              className="w-full h-[600px] bg-gray-700/50 border border-gray-600 rounded-lg p-4 text-white font-mono text-base resize-none"
+              className="w-full h-full min-h-[300px] bg-gray-700/50 border border-gray-600 rounded-lg p-4 text-white font-mono text-base resize-y mt-4"
             />
 
             {saveSuccess && (
@@ -412,7 +416,7 @@ const ScriptGenerator = ({ onNext, initialScript, initialIdea }) => {
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
-                <span>Changes saved successfully!</span>
+                <span>Changes saved successfully!</span> 
               </div>
             )}
 

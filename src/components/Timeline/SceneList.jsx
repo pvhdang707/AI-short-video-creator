@@ -66,7 +66,7 @@ const SceneList = ({
                   ) : (
                     <div className="text-gray-500 text-xs flex items-center">
                       <span className="mr-1">🖼️</span>
-                      Không có ảnh
+                      No image
                     </div>
                   )}
                 </div>
@@ -74,13 +74,13 @@ const SceneList = ({
                 <div className="space-y-1">
                   {/* Voice Over Text */}
                   <div className="text-xs text-gray-300 line-clamp-2 leading-relaxed">
-                    {scene.voice_over || "Không có nội dung"}
+                    {scene.voice_over || "No content"}
                   </div>
                   {/* Scene Stats */}
                   <div className="flex items-center space-x-3 text-xs text-gray-500">
                     <span className="flex items-center">
                       <span className="mr-1">🎵</span>
-                      {scene.voice?.audio_base64 ? "Có audio" : "Không audio"}
+                      {scene.voice?.audio_base64 ? "Has audio" : "No audio"}
                     </span>
                     <span className="flex items-center">
                       <span className="mr-1">📝</span>

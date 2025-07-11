@@ -70,7 +70,7 @@ const ContentGenerator = ({ script, onNext, onBack, initialContent }) => {
   const [scenes, setScenes] = useState([]);
   const [hasChanges, setHasChanges] = useState(false);
   const [isGeneratingAll, setIsGeneratingAll] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [previewAudios, setPreviewAudios] = useState({});
   const [isPreviewing, setIsPreviewing] = useState({});
   const [uploadedFiles, setUploadedFiles] = useState({});
@@ -78,6 +78,8 @@ const ContentGenerator = ({ script, onNext, onBack, initialContent }) => {
   const [generatedVoices, setGeneratedVoices] = useState({});
   const [regeneratingScene, setRegeneratingScene] = useState(null);
   const [isUploadingCover, setIsUploadingCover] = useState(false);
+  const [databaseConnectionError, setDatabaseConnectionError] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
 
   // Hàm tạo lại ảnh cho một scene - ĐÃ CẢI THIỆN
   const handleRegenerateImage = async (sceneNumber, prompt) => {
@@ -187,6 +189,9 @@ const ContentGenerator = ({ script, onNext, onBack, initialContent }) => {
   // Hàm tạo ảnh cho toàn bộ script
   const generateImagesForScript = async () => {
     try {
+      console.log('Starting image generation for script:', script.id);
+      setDatabaseConnectionError(false);
+      
       const response = await imageAPI.generateImagesForScript(script.id);
       
       if (response.data && Array.isArray(response.data)) {
@@ -208,11 +213,31 @@ const ContentGenerator = ({ script, onNext, onBack, initialContent }) => {
           ...prev,
           ...newGeneratedImages
         }));
+        
+        console.log('Image generation completed successfully');
         return true;
       }
     } catch (error) {
       console.error('Error generating images:', error);
-      showError('An error occurred while generating images for the video');
+      
+      // Xử lý các loại lỗi cụ thể
+      if (error.response?.status === 500) {
+        const errorDetail = error.response?.data?.detail || '';
+        if (errorDetail.includes('SSL connection') || errorDetail.includes('database')) {
+          setDatabaseConnectionError(true);
+          setRetryCount(prev => prev + 1);
+          showError('Database connection error. Please try again in a few moments.');
+        } else {
+          showError('Server error occurred while generating images. Please try again.');
+        }
+      } else if (error.response?.status === 404) {
+        showError('Script not found. Please refresh the page and try again.');
+      } else if (error.code === 'ERR_NETWORK') {
+        showError('Network error. Please check your connection and try again.');
+      } else {
+        showError('An error occurred while generating images for the video');
+      }
+      
       return false;
     }
   };
@@ -596,6 +621,36 @@ const ContentGenerator = ({ script, onNext, onBack, initialContent }) => {
         </div>
       )}
 
+      {/* Database Connection Error Alert */}
+      {databaseConnectionError && (
+        <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-xl">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <div className="p-2 rounded-xl bg-red-500/20">
+                <svg className="w-6 h-6 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-red-400">Database Connection Error</h3>
+                <p className="text-red-300 text-sm">
+                  Unable to connect to database. Retry count: {retryCount}
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => {
+                setDatabaseConnectionError(false);
+                generateContentForScript();
+              }}
+              className="px-4 py-2 bg-red-500/20 text-red-400 rounded-lg hover:bg-red-500/30 transition-colors"
+            >
+              Retry
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Scenes List */}
       <div className="space-y-6">
         <div className="flex items-center space-x-3 mb-6">
@@ -750,7 +805,7 @@ const ContentGenerator = ({ script, onNext, onBack, initialContent }) => {
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path>
               </svg>
-              <span>Đang upload ảnh bìa...</span>
+              <span>Uploading cover image...</span>
             </>
           ) : (
             <>

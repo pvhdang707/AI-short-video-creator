@@ -15,16 +15,13 @@ import {
 } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 import { generateScript } from "../../../utils/scriptGenerator.js";
-import ZIndexManager from "../../../components/ZIndexFix.jsx";
-import { fontList, visibleFontList } from "../../../utils/fontList.js";
-import ModalPortal from "../../../components/ModalPortal.jsx";
+
 import SceneList from "../../../components/Timeline/SceneList.jsx";
 import SceneEditor from "../../../components/Timeline/SceneEditor.jsx";
 import TextModal from "../../../components/Timeline/TextModal.jsx";
 import ImageModal from "../../../components/Timeline/ImageModal.jsx";
 import ImageOverlayControlsModal from "../../../components/Timeline/ImageOverlayControlsModal.jsx";
 import VideoSettingsPanel from "../../../components/Timeline/VideoSettingsPanel.jsx";
-import CustomSlider from "../../../components/Timeline/CustomSlider.jsx";
 
 // Đặt hàm injectFont ở đầu file, trước khi khai báo component
 const loadedFonts = new Set();

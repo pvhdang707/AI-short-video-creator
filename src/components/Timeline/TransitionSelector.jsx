@@ -9,30 +9,24 @@ const TransitionSelector = ({
   onToggleExpanded,
 }) => {
   const availableTransitions = [
-    { value: "none", label: "Không có", icon: "—", description: "Không có hiệu ứng chuyển cảnh" },
-    { value: "fade", label: "Fade", icon: "✨", description: "Mờ dần từ scene này sang scene khác" },
-    { value: "slide", label: "Slide", icon: "➡️", description: "Trượt từ trái sang phải" },
-    { value: "zoom", label: "Zoom", icon: "🔍", description: "Phóng to/thu nhỏ khi chuyển cảnh" },
-    { value: "blur", label: "Blur", icon: "🌫️", description: "Làm mờ chuyển đổi" },
-    { value: "wipe", label: "Wipe", icon: "🧹", description: "Quét từ phải sang trái" },
-    { value: "dissolve", label: "Dissolve", icon: "💫", description: "Hòa tan chuyển đổi" },
-    { value: "smoothleft", label: "Smooth Left", icon: "⬅️", description: "Trượt mượt sang trái" },
-    { value: "smoothright", label: "Smooth Right", icon: "➡️", description: "Trượt mượt sang phải" },
-    { value: "smoothup", label: "Smooth Up", icon: "⬆️", description: "Trượt mượt lên trên" },
-    { value: "smoothdown", label: "Smooth Down", icon: "⬇️", description: "Trượt mượt xuống dưới" },
+    { value: "none", label: "No Transition", icon: "—", description: "None" },
+    { value: "fade", label: "Fade", icon: "✨", description: "Fade" },
+    { value: "slide", label: "Slide", icon: "➡️", description: "Slide" },
+    { value: "zoom", label: "Zoom", icon: "🔍", description: "Zoom" },
+    { value: "blur", label: "Blur", icon: "🌫️", description: "Blur" },
+    { value: "wipe", label: "Wipe", icon: "🧹", description: "Wipe" },
+    { value: "dissolve", label: "Dissolve", icon: "💫", description: "Dissolve" },
+    { value: "smoothleft", label: "Smooth Left", icon: "⬅️", description: "Smooth Left" },
+    { value: "smoothright", label: "Smooth Right", icon: "➡️", description: "Smooth Right" },
+    { value: "smoothup", label: "Smooth Up", icon: "⬆️", description: "Smooth Up" },
+    { value: "smoothdown", label: "Smooth Down", icon: "⬇️", description: "Smooth Down" },
   ];
 
   const currentTransition = availableTransitions.find(
     (t) => t.value === transition.type
   );
 
-  // Preset durations cho transition
-  const presetDurations = [
-    { value: 0.3, label: "Nhanh", icon: "⚡" },
-    { value: 0.6, label: "Trung bình", icon: "⏱️" },
-    { value: 1.0, label: "Chậm", icon: "🐌" },
-    { value: 1.5, label: "Rất chậm", icon: "🕐" },
-  ];
+  
 
   return (
     <div
@@ -99,7 +93,7 @@ const TransitionSelector = ({
             <div>
               <label className="block text-sm text-gray-300 font-medium mb-3 flex items-center">
                 <span className="mr-2">🎬</span>
-                Loại transition
+                Transition Effect
               </label>
               <div className="grid grid-cols-4 gap-2">
                 {availableTransitions.map((option) => (
@@ -133,7 +127,7 @@ const TransitionSelector = ({
                   <label className="block text-sm text-gray-300 font-medium mb-2 flex items-center justify-between">
                     <span className="flex items-center">
                       <span className="mr-2">🎚️</span>
-                      Tùy chỉnh thời lượng
+                      Duration
                     </span>
                     <span className="text-lg font-bold text-blue-400 bg-blue-900/30 px-3 py-1 rounded-lg">
                       {transition.duration}s

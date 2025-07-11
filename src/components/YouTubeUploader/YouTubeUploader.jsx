@@ -40,7 +40,6 @@ const YouTubeUploader = ({ videoUrl, projectTitle, projectDescription, onUploadS
       formData.append('file_url', videoUrl);
 
       const result = await YouTubeService.uploadVideo(formData);
-      toast.success('✅ Upload video lên YouTube thành công!');
       
       if (onUploadSuccess) {
         onUploadSuccess(result);

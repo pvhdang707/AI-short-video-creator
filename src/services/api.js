@@ -255,7 +255,24 @@ export const imageAPI = {
   }),
 
   // Tạo hình ảnh cho toàn bộ script
-  generateImagesForScript: (scriptId) => api.post(`/images/generate-for-script/${scriptId}`),
+  generateImagesForScript: (scriptId) => {
+    console.log('Calling generateImagesForScript API for scriptId:', scriptId);
+    return api.post(`/images/generate-for-script/${scriptId}`).catch(error => {
+      console.error('API Error in generateImagesForScript:', error);
+      
+      // Log chi tiết lỗi để debug
+      if (error.response) {
+        console.error('Response error details:', {
+          status: error.response.status,
+          statusText: error.response.statusText,
+          data: error.response.data
+        });
+      }
+      
+      // Re-throw error để component có thể xử lý
+      throw error;
+    });
+  },
 
   // Cập nhật hình ảnh của scene
   updateSceneImage: (imageId, data) => api.put(`/images/scene-images/${imageId}`, {

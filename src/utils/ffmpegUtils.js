@@ -5,6 +5,135 @@ import { ensureFontInFS } from "./ffmpegFontLoader";
 import { fontList } from "./fontList";
 // import { getAudioDuration } from './videoUtils';
 
+// Hàm xử lý nhạc nền
+const processBackgroundMusic = async (ffmpeg, backgroundMusic, totalDuration, volume =0.2 , inputIndex = 1) => {
+  try {
+    if (!backgroundMusic || !backgroundMusic.path) {
+      console.log('No background music specified');
+      return null;
+    }
+
+    console.log('Processing background music:', backgroundMusic.name);
+    console.log('Total video duration:', totalDuration);
+    console.log('Background music volume:', volume);
+    console.log('Background music input index:', inputIndex);
+
+    // Tải file nhạc nền - sử dụng đường dẫn từ public
+    const musicPath = backgroundMusic.path;
+    const musicResponse = await fetch(musicPath);
+    if (!musicResponse.ok) {
+      throw new Error(`Failed to load background music: ${musicResponse.status}`);
+    }
+
+    const musicBlob = await musicResponse.blob();
+    const musicBuffer = await musicBlob.arrayBuffer();
+    const musicFileName = `background_music_${Date.now()}.mp3`;
+    
+    await ffmpeg.writeFile(musicFileName, new Uint8Array(musicBuffer));
+    console.log('Background music loaded:', musicFileName);
+
+    // Lấy thời lượng thực tế của nhạc từ metadata
+    let musicDuration = 60; // Default 60 seconds
+    
+    try {
+      // Tạo một audio element để lấy thời lượng
+      const audio = new Audio();
+      audio.src = musicPath;
+      
+      await new Promise((resolve, reject) => {
+        audio.addEventListener('loadedmetadata', () => {
+          musicDuration = audio.duration;
+          console.log('Actual music duration from audio element:', musicDuration, 'seconds');
+          console.log('Background music duration from metadata:', backgroundMusic.duration);
+          resolve();
+        });
+        audio.addEventListener('error', reject);
+        // Timeout sau 5 giây
+        setTimeout(() => reject(new Error('Timeout loading audio metadata')), 5000);
+      });
+    } catch (error) {
+      console.warn('Could not get actual music duration, using fallback:', error);
+      // Thử parse duration từ backgroundMusic.duration nếu có
+      if (backgroundMusic.duration) {
+        try {
+          // Nếu duration có format "4:15", chuyển thành seconds
+          if (typeof backgroundMusic.duration === 'string' && backgroundMusic.duration.includes(':')) {
+            const parts = backgroundMusic.duration.split(':');
+            const minutes = parseInt(parts[0]);
+            const seconds = parseInt(parts[1]);
+            musicDuration = minutes * 60 + seconds;
+            console.log('Parsed duration from string:', backgroundMusic.duration, '=', musicDuration, 'seconds');
+          } else {
+            musicDuration = parseFloat(backgroundMusic.duration) || 60;
+            console.log('Using duration from metadata:', musicDuration, 'seconds');
+          }
+        } catch (parseError) {
+          console.warn('Could not parse duration, using default 60s:', parseError);
+          musicDuration = 60;
+        }
+      } else {
+        musicDuration = 60;
+        console.log('No duration info, using default 60s');
+      }
+    }
+    
+    console.log('Music duration:', musicDuration, 'seconds');
+    console.log('Total video duration:', totalDuration, 'seconds');
+    console.log('Music vs Video duration check:', {
+      musicDuration,
+      totalDuration,
+      isMusicLonger: musicDuration >= totalDuration,
+      difference: totalDuration - musicDuration
+    });
+    
+    // Tạo filter để loop nhạc nền đủ thời lượng video
+    // Sử dụng input index động và label duy nhất
+    const bgMusicInput = `[${inputIndex}:a]`;
+    const bgMusicOutput = `[bg_music_vol_${inputIndex}]`;
+    
+    let backgroundMusicFilter;
+    
+    // Luôn đảm bảo nhạc nền kéo dài đủ thời lượng video
+    if (musicDuration >= totalDuration) {
+      // Nếu nhạc dài hơn hoặc bằng video, chỉ cần cắt và thêm fade out
+      const fadeOutStart = Math.max(0, totalDuration - 3); // Fade out trong 3s cuối
+      backgroundMusicFilter = `${bgMusicInput}atrim=0:${totalDuration},afade=t=out:st=${fadeOutStart}:d=3,volume=${volume}${bgMusicOutput}`;
+      console.log('Music is longer than video, using trim with fade out');
+      console.log('Fade out timing:', { fadeOutStart, duration: 3, totalDuration });
+      console.log('Filter for longer music:', backgroundMusicFilter);
+    } else {
+      // Nếu nhạc ngắn hơn video, cần loop để kéo dài
+      console.log('Music is shorter than video, using loop to extend');
+      // Tính toán số lần loop cần thiết
+      const loopCount = Math.ceil(totalDuration / musicDuration);
+      console.log('Required loop count:', loopCount);
+      
+      // Sử dụng aloop để lặp lại nhạc nền, sau đó cắt và thêm fade out
+      const fadeOutStart = Math.max(0, totalDuration - 3); // Fade out trong 3s cuối
+      const loopFilter = `${bgMusicInput}aloop=loop=${loopCount-1}:size=${Math.ceil(totalDuration * 44100)},atrim=0:${totalDuration},afade=t=out:st=${fadeOutStart}:d=3,volume=${volume}${bgMusicOutput}`;
+      backgroundMusicFilter = loopFilter;
+      console.log('Fade out timing for loop:', { fadeOutStart, duration: 3, totalDuration, loopCount });
+      console.log('Filter for shorter music with loop:', backgroundMusicFilter);
+    }
+
+    console.log('Background music filter created:', backgroundMusicFilter);
+    console.log('Background music input label:', bgMusicInput);
+    console.log('Background music output label:', bgMusicOutput);
+
+    return {
+      fileName: musicFileName,
+      filter: backgroundMusicFilter,
+      inputIndex: inputIndex, // Sử dụng input index được truyền vào
+      outputLabel: bgMusicOutput, // Label output duy nhất
+      inputLabel: bgMusicInput // Label input duy nhất
+    };
+
+  } catch (error) {
+    console.error('Error processing background music:', error);
+    return null;
+  }
+};
+
 
 
 // Hàm tiện ích để chuyển đổi màu sắc thành mã hex hợp lệ
@@ -312,6 +441,47 @@ export const generateVideoFromScript = async (ffmpeg, script, onProgress) => {
     console.log('Cài đặt video:', output);
     console.log('Cài đặt toàn cục:', global);
 
+    // Tính tổng thời lượng video
+    const totalDuration = scenes.reduce((total, scene) => total + (scene.duration || 5), 0);
+    console.log('Total video duration:', totalDuration);
+
+    // Xử lý nhạc nền nếu có
+    let backgroundMusicInfo = null;
+    if (global?.backgroundMusicEnabled && global?.backgroundMusic) {
+      console.log('=== BACKGROUND MUSIC DEBUG ===');
+      console.log('Global settings:', global);
+      console.log('Background music enabled:', global.backgroundMusicEnabled);
+      console.log('Background music:', global.backgroundMusic);
+      console.log('Background music volume:', global.backgroundMusicVolume);
+      console.log('Total video duration:', totalDuration);
+      
+      console.log('Processing background music...');
+      // Tính toán input index cho background music
+      // Với concat: Input 0: concat file, Input 1: background music
+      // Với transition: Input 0-N: scene files, Input N+1: background music
+      const bgMusicInputIndex = scenes.length; // Background music luôn là input thứ 2 (sau concat file hoặc scene files)
+      console.log('Background music input index:', bgMusicInputIndex);
+      
+      backgroundMusicInfo = await processBackgroundMusic(
+        ffmpeg, 
+        global.backgroundMusic, 
+        totalDuration, 
+        global.backgroundMusicVolume || 0.15,
+        bgMusicInputIndex
+      );
+      if (backgroundMusicInfo) {
+        console.log('Background music processed successfully:', backgroundMusicInfo);
+      } else {
+        console.log('Background music processing failed or returned null');
+      }
+    } else {
+      console.log('=== BACKGROUND MUSIC DEBUG ===');
+      console.log('Background music not enabled or not selected');
+      console.log('Global settings:', global);
+      console.log('backgroundMusicEnabled:', global?.backgroundMusicEnabled);
+      console.log('backgroundMusic:', global?.backgroundMusic);
+    }
+
     // Xử lý từng scene
     for (let i = 0; i < scenes.length; i++) {
       const scene = scenes[i];
@@ -591,12 +761,14 @@ export const generateVideoFromScript = async (ffmpeg, script, onProgress) => {
         throw new Error(`Lỗi khi xử lý scene ${i + 1}: ${error.message || 'Không xác định'}`);
       }
 
-      // Cập nhật tiến trình
-      onProgress(((i + 1) / scenes.length) * 100);
+      // Cập nhật tiến trình chi tiết hơn
+      const sceneProgress = ((i + 1) / scenes.length) * 80; // 80% cho việc xử lý scene
+      onProgress(sceneProgress);
     }
 
     // Nối các scene lại với nhau
     console.log('Đang nối các scene...');
+    onProgress(85); // 85% cho việc bắt đầu nối video
     
     // Kiểm tra xem có transition effects không
     const hasIndividualTransitions = script.global?.transitions?.individualTransitions && 
@@ -669,21 +841,65 @@ export const generateVideoFromScript = async (ffmpeg, script, onProgress) => {
             audioMapping = ['-map', '0:a?'];
           }
           
+          // Xử lý nhạc nền nếu có
+          let finalAudioFilter = audioFilter;
+          let finalAudioMapping = audioMapping;
+          
+          if (backgroundMusicInfo) {
+            console.log('Adding background music to transition video...');
+            console.log('Background music info:', backgroundMusicInfo);
+            
+            // Đặt biến label trước khi dùng
+            const bgMusicInputIndexForTransition = scenes.length;
+            const bgMusicLabel = `[bg_music_vol_${bgMusicInputIndexForTransition}]`;
+
+            // Thay thế label trong background music filter
+            console.log('Original background music filter:', backgroundMusicInfo.filter);
+            console.log('Replacing label:', `[bg_music_vol_${backgroundMusicInfo.inputIndex}]`, 'with:', bgMusicLabel);
+            const transitionBgMusicFilter = backgroundMusicInfo.filter.replace(/\[\d+:a\]/g, `[${bgMusicInputIndexForTransition}:a]`);
+            console.log('Transition background music filter:', transitionBgMusicFilter);
+
+            // Kết hợp audio từ video với nhạc nền
+            if (audioFilter) {
+              finalAudioFilter = `${audioFilter};[aout]${bgMusicLabel}amix=inputs=2:duration=longest[aout_with_bg]`;
+              finalAudioMapping = ['-map', '[aout_with_bg]'];
+              console.log('Transition with video audio + background music');
+              console.log('Final audio filter:', finalAudioFilter);
+            } else {
+              finalAudioMapping = ['-map', bgMusicLabel];
+              console.log('Transition with background music only');
+            }
+          } else {
+            console.log('No background music for transition');
+          }
+          
           // Kết hợp video và audio filter
-          const combinedFilter = audioFilter ? 
-            `${transitionFilter};${audioFilter}` : 
-            transitionFilter;
+          // Với transition, background music là input cuối cùng (sau tất cả scene files)
+          const bgMusicInputIndexForTransition = scenes.length;
+          const bgMusicLabel = `[bg_music_vol_${bgMusicInputIndexForTransition}]`;
+          
+          // Thay thế label trong background music filter
+          console.log('Original background music filter:', backgroundMusicInfo.filter);
+          console.log('Replacing label:', `[bg_music_vol_${backgroundMusicInfo.inputIndex}]`, 'with:', bgMusicLabel);
+          const transitionBgMusicFilter = backgroundMusicInfo.filter.replace(/\[\d+:a\]/g, `[${bgMusicInputIndexForTransition}:a]`);
+          console.log('Transition background music filter:', transitionBgMusicFilter);
+          
+          const combinedFilter = finalAudioFilter ? 
+            `${transitionFilter};${transitionBgMusicFilter};${finalAudioFilter}` : 
+            `${transitionFilter};${transitionBgMusicFilter}`;
           
           // Tạo lệnh FFmpeg với transition cho tất cả các scene
           const transitionCommand = [
             // Input tất cả các scene
             ...scenes.flatMap((_, i) => ['-i', `scene_${i}.mp4`]),
+            // Input nhạc nền nếu có (sẽ được xử lý trong filter)
+            ...(backgroundMusicInfo ? [`-i`, backgroundMusicInfo.fileName] : []),
             // Filter complex cho transition và audio
             '-filter_complex', combinedFilter,
             // Output mapping
             '-map', '[outv]',
             // Audio mapping
-            ...audioMapping,
+            ...finalAudioMapping,
             // Encoding settings
             '-c:v', output.codec || 'libx264',
             '-preset', output.preset || 'medium',
@@ -706,8 +922,9 @@ export const generateVideoFromScript = async (ffmpeg, script, onProgress) => {
           console.log('Number of inputs:', scenes.length);
           console.log('Expected filter format: [0:v][1:v]xfade=transition=fade:duration=0.6:offset=5.444[outv]');
           
-          await ffmpeg.exec(transitionCommand);
-          console.log('Đã tạo video với transition effects thành công cho tất cả các scene');
+                  await ffmpeg.exec(transitionCommand);
+        console.log('Đã tạo video với transition effects thành công cho tất cả các scene');
+        onProgress(95); // 95% cho việc hoàn thành transition
         } else {
           throw new Error('Không thể tạo transition filter');
         }
@@ -739,33 +956,129 @@ export const generateVideoFromScript = async (ffmpeg, script, onProgress) => {
         console.log('Lệnh nối video (fallback):', concatCommand.join(' '));
         await ffmpeg.exec(concatCommand);
         console.log('Đã nối các scene thành công (fallback)');
+        onProgress(95); // 95% cho việc hoàn thành concat fallback
       }
     } else {
       // Sử dụng concat đơn giản nếu không có transition
       console.log('Sử dụng concat đơn giản (không có transition)');
-      const concatFile = scenes.map((_, i) => `file scene_${i}.mp4`).join('\n');
-      await ffmpeg.writeFile('concat.txt', concatFile);
       
-      const concatCommand = [
-        '-f', 'concat',
-        '-safe', '0',
-        '-i', 'concat.txt',
-        '-c:v', output.codec || 'libx264',
-        '-c:a', 'aac',
-        '-preset', output.preset || 'medium',
-        '-crf', (output.crf || 23).toString(),
-        '-r', (output.fps || 30).toString(),
-        '-pix_fmt', 'yuv420p',
-        '-fflags', '+genpts',
-        '-async', '1',
-        '-avoid_negative_ts', 'make_zero',
-        '-y',
-        'output.mp4'
-      ];
-      
-      console.log('Lệnh nối video:', concatCommand.join(' '));
-      await ffmpeg.exec(concatCommand);
-      console.log('Đã nối các scene thành công');
+      if (backgroundMusicInfo) {
+        console.log('Adding background music to concat video...');
+        console.log('Background music info:', backgroundMusicInfo);
+        
+        // Tạo concat file trước
+        const concatFile = scenes.map((_, i) => `file scene_${i}.mp4`).join('\n');
+        await ffmpeg.writeFile('concat.txt', concatFile);
+        
+        // Kiểm tra xem video có audio không
+        const hasVideoAudio = scenes.some(scene => scene.audio || scene.voice);
+        console.log('Has video audio:', hasVideoAudio);
+        
+        if (hasVideoAudio) {
+          // Có audio từ video + nhạc nền
+          // Với concat: Input 0: concat file, Input 1: background music
+          const concatBgMusicLabel = `[bg_music_vol_1]`;
+          const audioFilter = `[0:a]${concatBgMusicLabel}amix=inputs=2:duration=longest[aout_with_bg]`;
+          console.log('Audio filter for video with background music:', audioFilter);
+          
+          // Thay thế label trong background music filter cho concat
+          console.log('Original background music filter for concat (with audio):', backgroundMusicInfo.filter);
+          console.log('Replacing label for concat (with audio):', `[bg_music_vol_${backgroundMusicInfo.inputIndex}]`, 'with: [bg_music_vol_1]');
+          const bgMusicInputIndex = 1; // Với concat: Input 0 là concat file, Input 1 là background music
+          const concatBgMusicFilter = backgroundMusicInfo.filter.replace(/\[\d+:a\]/g, `[${bgMusicInputIndex}:a]`);
+          console.log('Concat background music filter (with audio):', concatBgMusicFilter);
+          
+          const concatCommand = [
+            '-f', 'concat',
+            '-safe', '0',
+            '-i', 'concat.txt',
+            '-i', backgroundMusicInfo.fileName,
+            '-filter_complex', `${concatBgMusicFilter};${audioFilter}`,
+            '-map', '0:v',
+            '-map', '[aout_with_bg]',
+            '-c:v', output.codec || 'libx264',
+            '-c:a', 'aac',
+            '-preset', output.preset || 'medium',
+            '-crf', (output.crf || 23).toString(),
+            '-r', (output.fps || 30).toString(),
+            '-pix_fmt', 'yuv420p',
+            '-fflags', '+genpts',
+            '-async', '1',
+            '-avoid_negative_ts', 'make_zero',
+            '-y',
+            'output.mp4'
+          ];
+          
+          console.log('Lệnh nối video với nhạc nền và audio:', concatCommand.join(' '));
+          console.log('Filter complex:', `${concatBgMusicFilter};${audioFilter}`);
+          await ffmpeg.exec(concatCommand);
+          console.log('Đã nối các scene với nhạc nền và audio thành công');
+          onProgress(95); // 95% cho việc hoàn thành concat với nhạc nền
+        } else {
+          // Chỉ có nhạc nền, không có audio từ video
+          console.log('Only background music, no video audio');
+          // Thay thế label trong background music filter cho concat
+          console.log('Original background music filter for concat (no audio):', backgroundMusicInfo.filter);
+          console.log('Replacing label for concat (no audio):', `[bg_music_vol_${backgroundMusicInfo.inputIndex}]`, 'with: [bg_music_vol_1]');
+          const bgMusicInputIndex = 1; // Với concat: Input 0 là concat file, Input 1 là background music
+          const concatBgMusicFilter = backgroundMusicInfo.filter.replace(/\[\d+:a\]/g, `[${bgMusicInputIndex}:a]`);
+          console.log('Concat background music filter (no audio):', concatBgMusicFilter);
+          
+          const concatCommand = [
+            '-f', 'concat',
+            '-safe', '0',
+            '-i', 'concat.txt',
+            '-i', backgroundMusicInfo.fileName,
+            '-filter_complex', concatBgMusicFilter,
+            '-map', '0:v',
+            '-map', '[bg_music_vol_1]',
+            '-c:v', output.codec || 'libx264',
+            '-c:a', 'aac',
+            '-preset', output.preset || 'medium',
+            '-crf', (output.crf || 23).toString(),
+            '-r', (output.fps || 30).toString(),
+            '-pix_fmt', 'yuv420p',
+            '-fflags', '+genpts',
+            '-async', '1',
+            '-avoid_negative_ts', 'make_zero',
+            '-y',
+            'output.mp4'
+          ];
+          
+          console.log('Lệnh nối video với nhạc nền:', concatCommand.join(' '));
+          console.log('Filter complex:', concatBgMusicFilter);
+          await ffmpeg.exec(concatCommand);
+          console.log('Đã nối các scene với nhạc nền thành công');
+          onProgress(95); // 95% cho việc hoàn thành concat chỉ nhạc nền
+        }
+      } else {
+        console.log('No background music info, using normal concat');
+        // Không có nhạc nền, sử dụng concat bình thường
+        const concatFile = scenes.map((_, i) => `file scene_${i}.mp4`).join('\n');
+        await ffmpeg.writeFile('concat.txt', concatFile);
+        
+        const concatCommand = [
+          '-f', 'concat',
+          '-safe', '0',
+          '-i', 'concat.txt',
+          '-c:v', output.codec || 'libx264',
+          '-c:a', 'aac',
+          '-preset', output.preset || 'medium',
+          '-crf', (output.crf || 23).toString(),
+          '-r', (output.fps || 30).toString(),
+          '-pix_fmt', 'yuv420p',
+          '-fflags', '+genpts',
+          '-async', '1',
+          '-avoid_negative_ts', 'make_zero',
+          '-y',
+          'output.mp4'
+        ];
+        
+        console.log('Lệnh nối video:', concatCommand.join(' '));
+        await ffmpeg.exec(concatCommand);
+        console.log('Đã nối các scene thành công');
+        onProgress(95); // 95% cho việc hoàn thành concat đơn giản
+      }
     }
 
     // Verify output.mp4 exists
@@ -781,6 +1094,7 @@ export const generateVideoFromScript = async (ffmpeg, script, onProgress) => {
     }
 
     // Đọc file output
+    onProgress(98); // 98% cho việc bắt đầu đọc file
     let videoBlob;
     let retryCount = 0;
     const maxRetries = 3;
@@ -808,6 +1122,7 @@ export const generateVideoFromScript = async (ffmpeg, script, onProgress) => {
         
         console.log(`Đã đọc file output video: ${data.byteLength} bytes`);
         videoBlob = new Blob([data], { type: 'video/mp4' });
+        onProgress(100); // 100% cho việc hoàn thành
         break; // Success! Exit the retry loop
       } catch (readError) {
         console.error(`Chi tiết lỗi khi đọc file output (attempt ${retryCount + 1}/${maxRetries}):`, readError);
@@ -883,6 +1198,16 @@ export const generateVideoFromScript = async (ffmpeg, script, onProgress) => {
         console.log('Không thể xóa global text files:', e);
       }
       
+      // Xóa file nhạc nền nếu có
+      if (backgroundMusicInfo && backgroundMusicInfo.fileName) {
+        try {
+          await ffmpeg.deleteFile(backgroundMusicInfo.fileName);
+          console.log('Đã xóa file nhạc nền:', backgroundMusicInfo.fileName);
+        } catch (e) {
+          console.log('Không thể xóa file nhạc nền:', e);
+        }
+      }
+      
       // Xóa concat.txt nếu tồn tại
       try {
         await ffmpeg.deleteFile('concat.txt');
@@ -918,7 +1243,8 @@ export const initFFmpeg = async () => {
     // Load the FFmpeg instance
     await ffmpeg.load();
     console.log('FFmpeg loaded successfully');
-      // Verify FFmpeg is working by performing a simple operation
+    
+    // Verify FFmpeg is working by performing a simple operation
     try {
       await ffmpeg.writeFile('test.txt', new Uint8Array([116, 101, 115, 116])); // "test" in ASCII
       const testData = await ffmpeg.readFile('test.txt');
@@ -973,14 +1299,20 @@ export const initFFmpeg = async () => {
     const fontPaths = [
       '/fonts/ARIAL.TTF',
       '/fonts/arial.ttf',
+      '/fonts/Arial.ttf',
       '/public/fonts/ARIAL.TTF',
       '/assets/fonts/ARIAL.TTF'
     ];
     
     let fontLoaded = false;
+    let loadedFontName = null;
+    
     for (const fontPath of fontPaths) {
       fontLoaded = await loadFontToFFmpeg(fontPath, 'arial.ttf');
-      if (fontLoaded) break;
+      if (fontLoaded) {
+        loadedFontName = 'arial.ttf';
+        break;
+      }
     }
     
     if (!fontLoaded) {
@@ -1010,6 +1342,9 @@ export const initFFmpeg = async () => {
         console.warn('Error when checking FFmpeg filesystem:', e);
       }
     }
+    
+    // Store the loaded font name in ffmpeg instance for later use
+    ffmpeg.loadedFontName = loadedFontName;
     
     return ffmpeg;
   } catch (error) {
@@ -1170,14 +1505,21 @@ const processTextOverlay = async (
     });
     
     // Xác định font file hợp lệ
-    let fontFile = "ARIAL.TTF";
+    let fontFile = "arial.ttf"; // Sử dụng font đã load
     if (style && style.fontFamily) {
       // Chỉ cho phép các font có trong fontList
       const found = fontList.find(f => f.file === style.fontFamily);
       if (found) fontFile = found.file;
     }
-    // Nạp font vào FS ảo nếu cần
-    const fontPath = await ensureFontInFS(ffmpeg, fontFile);
+    
+    // Sử dụng font đã load trong FFmpeg instance
+    let fontPath = fontFile;
+    if (ffmpeg.loadedFontName) {
+      fontPath = ffmpeg.loadedFontName;
+      console.log(`[Text Overlay ${overlayIndex}] Using loaded font: ${fontPath}`);
+    } else {
+      console.warn(`[Text Overlay ${overlayIndex}] No loaded font found, using default: ${fontPath}`);
+    }
     
     textFilter += `:fontsize=${scaledFontSize}`;
     textFilter += `:fontfile=${fontPath}`;
@@ -1627,7 +1969,7 @@ const createGlobalTextOverlayFilter = async (overlay, nextLabel, ffmpeg) => {
     let textExpression = `drawtext=textfile='${globalTextFileName}'` +
       `:x=(w-text_w)/2:y=${yPosition}` +
       `:fontsize=${actualFontSize}` +
-      `:fontfile=arial.ttf` +
+      `:fontfile=${ffmpeg.loadedFontName || 'arial.ttf'}` +
       `:fontcolor=0x${hexColor}`;
     if (background && backgroundColor) {
       const hexBgColor = convertColorToHex(backgroundColor);

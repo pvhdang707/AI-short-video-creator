@@ -28,6 +28,10 @@ export const generateScript = async (content, videoSettings, sceneElements, ffmp
         bass: videoSettings.audioEffects.bass,
         treble: videoSettings.audioEffects.treble
       },
+      // Background Music Settings
+      backgroundMusicEnabled: videoSettings.backgroundMusicEnabled || false,
+      backgroundMusic: videoSettings.backgroundMusic || null,
+      backgroundMusicVolume: videoSettings.backgroundMusicVolume || 0.2,
       effects: {
         brightness: videoSettings.brightness,
         contrast: videoSettings.contrast,
