@@ -512,16 +512,19 @@ export const generateVideoFromScript = async (ffmpeg, script, onProgress) => {
         throw new Error(`Lỗi khi tải ảnh scene ${i + 1}: ${error.message}`);
       }
 
-      // Xử lý audio nếu có
+      // Xử lý audio nếu có (bao gồm cả audio file và voice TTS)
       let audioPath = null;
-      if (scene.audio) {
+      if (scene.audio || scene.voice?.audio_base64) {
         try {
-          console.log(`Đang xử lý audio nâng cao cho scene ${i + 1}`);
-          audioPath = await processAdvancedAudio(
-            ffmpeg, 
-            scene.audio.source, 
-            i, 
-            {
+          console.log(`Đang xử lý audio cho scene ${i + 1}`);
+          
+          let audioSource;
+          let audioSettings = {};
+          
+          if (scene.audio) {
+            // Xử lý audio file
+            audioSource = scene.audio.source;
+            audioSettings = {
               volume: scene.audio.volume || 1,
               fadeIn: scene.audio.fadeIn || 0,
               fadeOut: scene.audio.fadeOut || 0,
@@ -532,12 +535,38 @@ export const generateVideoFromScript = async (ffmpeg, script, onProgress) => {
               normalize: scene.audio.normalize || false,
               pitch: scene.audio.pitch || 1,
               tempo: scene.audio.tempo || 1
-            }
+            };
+            console.log(`Scene ${i + 1} sử dụng audio file`);
+          } else if (scene.voice?.audio_base64) {
+            // Xử lý voice TTS
+            audioSource = `data:audio/mp3;base64,${scene.voice.audio_base64}`;
+            audioSettings = {
+              volume: scene.voice.volume || 1,
+              fadeIn: scene.voice.fadeIn || 0,
+              fadeOut: scene.voice.fadeOut || 0,
+              duration: sceneDuration,
+              normalize: scene.voice.normalize || false,
+              pitch: scene.voice.pitch || 1,
+              tempo: scene.voice.speed || 1
+            };
+            console.log(`Scene ${i + 1} sử dụng voice TTS`);
+          }
+          
+          audioPath = await processAdvancedAudio(
+            ffmpeg, 
+            audioSource, 
+            i, 
+            audioSettings
           );
-          console.log(`Đã xử lý xong audio nâng cao cho scene ${i + 1}`);
+          console.log(`Đã xử lý xong audio cho scene ${i + 1}`);
         } catch (error) {
           throw new Error(`Lỗi khi xử lý audio scene ${i + 1}: ${error.message}`);
         }
+      }
+      // Nếu không có audio, tạo audio silent
+      if (!audioPath) {
+        audioPath = await createSilentAudio(ffmpeg, sceneDuration, i);
+        console.log(`Scene ${i + 1} không có audio, đã tạo silent audio:`, audioPath);
       }
 
       // Tạo filter string cho scene
@@ -582,8 +611,8 @@ export const generateVideoFromScript = async (ffmpeg, script, onProgress) => {
         let lastOverlayLabel = match ? `[${match[1]}]` : '[outv]';
         if (lastOverlayLabel !== '[outv]') {
           // Thêm filter pad và null[outv]
-          allFilters.push(`${lastOverlayLabel}pad=width=ceil(iw/2)*2:height=ceil(ih/2)*2[padout]`);
-          allFilters.push(`[padout]null[outv]`);
+          imageFilters.push(`${lastOverlayLabel}pad=width=ceil(iw/2)*2:height=ceil(ih/2)*2[padout]`);
+          imageFilters.push(`[padout]null[outv]`);
         }
       }
 
@@ -603,13 +632,10 @@ export const generateVideoFromScript = async (ffmpeg, script, onProgress) => {
       const ffmpegCommand = [
         '-loop', '1',
         '-i', `scene_${i}_image.jpg`,
-        '-t', sceneDuration.toString()
+        '-t', sceneDuration.toString(),
+        '-i', audioPath,
+        // ... existing code ...
       ];
-
-      // Thêm audio input nếu có (luôn là input thứ 2)
-      if (audioPath) {
-        ffmpegCommand.push('-i', audioPath);
-      }
 
       // Thêm các input cho overlay 
       if (overlayInputs && overlayInputs.length > 0) {
@@ -622,25 +648,23 @@ export const generateVideoFromScript = async (ffmpeg, script, onProgress) => {
         ffmpegCommand.push('-filter_complex', allFilters.join(';'));
         // Mapping: video từ filter output, audio từ input 1 (audio)
         ffmpegCommand.push('-map', '[outv]');
-        if (audioPath) {
-          ffmpegCommand.push('-map', '1:a');
-        }
+        ffmpegCommand.push('-map', '1:a');
       } else {
         // Nếu không có filter, map trực tiếp: video từ input 0, audio từ input 1
         ffmpegCommand.push('-map', '0:v');
-        if (audioPath) {
-          ffmpegCommand.push('-map', '1:a');
-        }
+        ffmpegCommand.push('-map', '1:a');
       }
 
-      // Thêm các tham số output
+      // Thêm các tham số output (chuẩn hóa audio)
       ffmpegCommand.push(
         '-c:v', output.codec || 'libx264',
         '-preset', output.preset || 'medium',
         '-crf', (output.crf || 23).toString(),
         '-r', (output.fps || 30).toString(),
-        // Không dùng -s vì đã xử lý scale trong filter để giữ aspect ratio
         '-pix_fmt', 'yuv420p',
+        '-c:a', 'aac',
+        '-ar', '44100',
+        '-ac', '2',
         '-fflags', '+genpts',  // Thêm genpts để đảm bảo timestamps chính xác
         '-shortest',  // Đảm bảo video dừng khi audio kết thúc
         '-y',
@@ -859,34 +883,51 @@ export const generateVideoFromScript = async (ffmpeg, script, onProgress) => {
             const transitionBgMusicFilter = backgroundMusicInfo.filter.replace(/\[\d+:a\]/g, `[${bgMusicInputIndexForTransition}:a]`);
             console.log('Transition background music filter:', transitionBgMusicFilter);
 
-            // Kết hợp audio từ video với nhạc nền
-            if (audioFilter) {
-              finalAudioFilter = `${audioFilter};[aout]${bgMusicLabel}amix=inputs=2:duration=longest[aout_with_bg]`;
-              finalAudioMapping = ['-map', '[aout_with_bg]'];
-              console.log('Transition with video audio + background music');
-              console.log('Final audio filter:', finalAudioFilter);
-            } else {
-              finalAudioMapping = ['-map', bgMusicLabel];
-              console.log('Transition with background music only');
-            }
+                      // Kết hợp audio từ video với nhạc nền
+          if (audioFilter) {
+            finalAudioFilter = `${audioFilter};[aout]${bgMusicLabel}amix=inputs=2:duration=longest[aout_with_bg]`;
+            finalAudioMapping = ['-map', '[aout_with_bg]'];
+            console.log('Transition with video audio + background music');
+            console.log('Final audio filter:', finalAudioFilter);
           } else {
-            console.log('No background music for transition');
+            finalAudioMapping = ['-map', bgMusicLabel];
+            console.log('Transition with background music only');
           }
+        } else {
+          console.log('No background music for transition');
+          // Nếu không có background music, chỉ sử dụng audio từ video
+          if (audioFilter) {
+            finalAudioFilter = audioFilter;
+            finalAudioMapping = ['-map', '[aout]'];
+            console.log('Transition with video audio only');
+          } else {
+            finalAudioMapping = []; // Không có audio
+            console.log('Transition with no audio');
+          }
+        }
           
-          // Kết hợp video và audio filter
-          // Với transition, background music là input cuối cùng (sau tất cả scene files)
-          const bgMusicInputIndexForTransition = scenes.length;
-          const bgMusicLabel = `[bg_music_vol_${bgMusicInputIndexForTransition}]`;
-          
-          // Thay thế label trong background music filter
-          console.log('Original background music filter:', backgroundMusicInfo.filter);
-          console.log('Replacing label:', `[bg_music_vol_${backgroundMusicInfo.inputIndex}]`, 'with:', bgMusicLabel);
-          const transitionBgMusicFilter = backgroundMusicInfo.filter.replace(/\[\d+:a\]/g, `[${bgMusicInputIndexForTransition}:a]`);
-          console.log('Transition background music filter:', transitionBgMusicFilter);
-          
-          const combinedFilter = finalAudioFilter ? 
-            `${transitionFilter};${transitionBgMusicFilter};${finalAudioFilter}` : 
-            `${transitionFilter};${transitionBgMusicFilter}`;
+          // Tạo combined filter dựa trên có background music hay không
+          let combinedFilter;
+          if (backgroundMusicInfo) {
+            // Có background music
+            const bgMusicInputIndexForTransition = scenes.length;
+            const bgMusicLabel = `[bg_music_vol_${bgMusicInputIndexForTransition}]`;
+            
+            // Thay thế label trong background music filter
+            console.log('Original background music filter:', backgroundMusicInfo.filter);
+            console.log('Replacing label:', `[bg_music_vol_${backgroundMusicInfo.inputIndex}]`, 'with:', bgMusicLabel);
+            const transitionBgMusicFilter = backgroundMusicInfo.filter.replace(/\[\d+:a\]/g, `[${bgMusicInputIndexForTransition}:a]`);
+            console.log('Transition background music filter:', transitionBgMusicFilter);
+            
+            combinedFilter = finalAudioFilter ? 
+              `${transitionFilter};${transitionBgMusicFilter};${finalAudioFilter}` : 
+              `${transitionFilter};${transitionBgMusicFilter}`;
+          } else {
+            // Không có background music
+            combinedFilter = finalAudioFilter ? 
+              `${transitionFilter};${finalAudioFilter}` : 
+              transitionFilter;
+          }
           
           // Tạo lệnh FFmpeg với transition cho tất cả các scene
           const transitionCommand = [
@@ -936,16 +977,12 @@ export const generateVideoFromScript = async (ffmpeg, script, onProgress) => {
         const concatFile = scenes.map((_, i) => `file scene_${i}.mp4`).join('\n');
         await ffmpeg.writeFile('concat.txt', concatFile);
         
+        // Sử dụng copy mode để giữ nguyên audio streams
         const concatCommand = [
           '-f', 'concat',
           '-safe', '0',
           '-i', 'concat.txt',
-          '-c:v', output.codec || 'libx264',
-          '-c:a', 'aac',
-          '-preset', output.preset || 'medium',
-          '-crf', (output.crf || 23).toString(),
-          '-r', (output.fps || 30).toString(),
-          '-pix_fmt', 'yuv420p',
+          '-c', 'copy', // Sử dụng copy để giữ nguyên cả video và audio
           '-fflags', '+genpts',
           '-async', '1',
           '-avoid_negative_ts', 'make_zero',
@@ -954,13 +991,45 @@ export const generateVideoFromScript = async (ffmpeg, script, onProgress) => {
         ];
         
         console.log('Lệnh nối video (fallback):', concatCommand.join(' '));
-        await ffmpeg.exec(concatCommand);
-        console.log('Đã nối các scene thành công (fallback)');
-        onProgress(95); // 95% cho việc hoàn thành concat fallback
+        
+        try {
+          await ffmpeg.exec(concatCommand);
+          console.log('Đã nối các scene thành công (fallback)');
+          onProgress(95); // 95% cho việc hoàn thành concat fallback
+        } catch (copyError) {
+          console.warn('Fallback copy mode failed, trying re-encode mode:', copyError);
+          
+          // Fallback: Re-encode để đảm bảo tương thích
+          const reencodeCommand = [
+            '-f', 'concat',
+            '-safe', '0',
+            '-i', 'concat.txt',
+            '-c:v', output.codec || 'libx264',
+            '-c:a', 'aac',
+            '-preset', output.preset || 'medium',
+            '-crf', (output.crf || 23).toString(),
+            '-r', (output.fps || 30).toString(),
+            '-pix_fmt', 'yuv420p',
+            '-fflags', '+genpts',
+            '-async', '1',
+            '-avoid_negative_ts', 'make_zero',
+            '-y',
+            'output.mp4'
+          ];
+          
+          console.log('Lệnh nối video (fallback re-encode):', reencodeCommand.join(' '));
+          await ffmpeg.exec(reencodeCommand);
+          console.log('Đã nối các scene thành công (fallback re-encode)');
+          onProgress(95); // 95% cho việc hoàn thành concat fallback re-encode
+        }
       }
     } else {
       // Sử dụng concat đơn giản nếu không có transition
       console.log('Sử dụng concat đơn giản (không có transition)');
+      
+      // Kiểm tra xem có scene nào có audio không
+      const hasVideoAudio = scenes.some(scene => scene.audio || scene.voice);
+      console.log('Has video audio:', hasVideoAudio);
       
       if (backgroundMusicInfo) {
         console.log('Adding background music to concat video...');
@@ -969,10 +1038,6 @@ export const generateVideoFromScript = async (ffmpeg, script, onProgress) => {
         // Tạo concat file trước
         const concatFile = scenes.map((_, i) => `file scene_${i}.mp4`).join('\n');
         await ffmpeg.writeFile('concat.txt', concatFile);
-        
-        // Kiểm tra xem video có audio không
-        const hasVideoAudio = scenes.some(scene => scene.audio || scene.voice);
-        console.log('Has video audio:', hasVideoAudio);
         
         if (hasVideoAudio) {
           // Có audio từ video + nhạc nền
@@ -1057,16 +1122,12 @@ export const generateVideoFromScript = async (ffmpeg, script, onProgress) => {
         const concatFile = scenes.map((_, i) => `file scene_${i}.mp4`).join('\n');
         await ffmpeg.writeFile('concat.txt', concatFile);
         
+        // QUAN TRỌNG: Sử dụng -c copy để giữ nguyên audio streams
         const concatCommand = [
           '-f', 'concat',
           '-safe', '0',
           '-i', 'concat.txt',
-          '-c:v', output.codec || 'libx264',
-          '-c:a', 'aac',
-          '-preset', output.preset || 'medium',
-          '-crf', (output.crf || 23).toString(),
-          '-r', (output.fps || 30).toString(),
-          '-pix_fmt', 'yuv420p',
+          '-c', 'copy', // Sử dụng copy để giữ nguyên cả video và audio
           '-fflags', '+genpts',
           '-async', '1',
           '-avoid_negative_ts', 'make_zero',
@@ -1074,10 +1135,38 @@ export const generateVideoFromScript = async (ffmpeg, script, onProgress) => {
           'output.mp4'
         ];
         
-        console.log('Lệnh nối video:', concatCommand.join(' '));
-        await ffmpeg.exec(concatCommand);
-        console.log('Đã nối các scene thành công');
-        onProgress(95); // 95% cho việc hoàn thành concat đơn giản
+        console.log('Lệnh nối video (copy mode):', concatCommand.join(' '));
+        
+        try {
+          await ffmpeg.exec(concatCommand);
+          console.log('Đã nối các scene thành công với copy mode');
+          onProgress(95); // 95% cho việc hoàn thành concat đơn giản
+        } catch (copyError) {
+          console.warn('Copy mode failed, trying re-encode mode:', copyError);
+          
+          // Fallback: Re-encode để đảm bảo tương thích
+          const reencodeCommand = [
+            '-f', 'concat',
+            '-safe', '0',
+            '-i', 'concat.txt',
+            '-c:v', output.codec || 'libx264',
+            '-c:a', 'aac',
+            '-preset', output.preset || 'medium',
+            '-crf', (output.crf || 23).toString(),
+            '-r', (output.fps || 30).toString(),
+            '-pix_fmt', 'yuv420p',
+            '-fflags', '+genpts',
+            '-async', '1',
+            '-avoid_negative_ts', 'make_zero',
+            '-y',
+            'output.mp4'
+          ];
+          
+          console.log('Lệnh nối video (re-encode mode):', reencodeCommand.join(' '));
+          await ffmpeg.exec(reencodeCommand);
+          console.log('Đã nối các scene thành công với re-encode mode');
+          onProgress(95); // 95% cho việc hoàn thành concat re-encode
+        }
       }
     }
 
@@ -1139,7 +1228,10 @@ export const generateVideoFromScript = async (ffmpeg, script, onProgress) => {
               '-f', 'concat',
               '-safe', '0',
               '-i', 'concat.txt',
-              '-c', 'copy',
+              '-c', 'copy', // Sử dụng copy để giữ nguyên cả video và audio
+              '-fflags', '+genpts',
+              '-async', '1',
+              '-avoid_negative_ts', 'make_zero',
               '-y',
               altOutputName
             ];
@@ -2249,3 +2341,20 @@ const getImageDimensions = (src) => {
     }
   });
 };
+
+// Thêm hàm tạo audio silent
+async function createSilentAudio(ffmpeg, duration, sceneIndex) {
+  const silentFile = `scene_${sceneIndex}_silent.mp3`;
+  await ffmpeg.exec([
+    '-f', 'lavfi',
+    '-i', 'anullsrc=channel_layout=stereo:sample_rate=44100',
+    '-t', duration.toString(),
+    '-q:a', '9',
+    '-acodec', 'aac',
+    '-ar', '44100',
+    '-ac', '2',
+    '-y',
+    silentFile
+  ]);
+  return silentFile;
+}
