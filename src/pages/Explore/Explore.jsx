@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import SectionTitle from "../../components/SectionTitle/SectionTitle";
 import ItemCard from "../../components/ItemCard/ItemCard";
 import { searchVideos } from "../../services/videoSearchService";
-import { getTiktokTrendingKeywords, getYouTubeTrendingKeywords } from "../../services/trendingKeywordService";
+import { getTiktokTrendingKeywords, getTrendingKeywords } from "../../services/trendingKeywordService";
 
 // Định nghĩa mảng keyword TikTok cứng
 const TIKTOK_KEYWORDS = [
@@ -142,7 +142,7 @@ const Explore = () => {
   // Hàm load YouTube keywords
   const loadYouTubeKeywords = () => {
     setPlatformKeywords(prev => ({ ...prev, loading: { ...prev.loading, youtube: true } }));
-    getYouTubeTrendingKeywords('VN', 15)
+    getTrendingKeywords('VN', 15)
       .then((keywords) => {
         console.log('YouTube trending keywords:', keywords);
         setPlatformKeywords(prev => ({ 

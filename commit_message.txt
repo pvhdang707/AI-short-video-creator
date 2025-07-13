@@ -1,7 +1,0 @@
-feat: Improve UI and functionality for Video Editor
-
-- Change display language from Vietnamese to English for components in SceneList and TransitionSelector
-- Add background music functionality to VideoSettingsPanel, allowing users to select and adjust background music volume
-- Improve state management and error handling in ContentGenerator, including database connection error notifications
-- Optimize video creation process with background music, including background music processing and volume adjustment
-- Update components to support new features and improve user experience 

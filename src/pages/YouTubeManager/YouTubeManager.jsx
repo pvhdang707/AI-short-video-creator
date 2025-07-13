@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import YouTubeService from '../../services/youtubeService';
+import YouTubeAnalytics30D from '../../components/YouTubeAnalytics30D';
 import { toast } from 'react-toastify';
 
 const YouTubeManager = () => {
@@ -115,9 +116,7 @@ const YouTubeManager = () => {
             </svg>            <h1 className="text-3xl font-bold">YouTube Manager</h1>
           </div>
           <p className="text-gray-400">Manage your YouTube channel and videos</p>
-        </div>
-
-        {/* Tabs */}        <div className="flex space-x-1 mb-8 bg-gray-800 p-1 rounded-lg">
+        </div>        {/* Tabs */}        <div className="flex space-x-1 mb-8 bg-gray-800 p-1 rounded-lg">
           <button
             onClick={() => setActiveTab('stats')}
             className={`flex-1 px-4 py-2 rounded-md transition ${
@@ -127,6 +126,16 @@ const YouTubeManager = () => {
             }`}
           >
             Channel Statistics
+          </button>
+          <button
+            onClick={() => setActiveTab('analytics')}
+            className={`flex-1 px-4 py-2 rounded-md transition ${
+              activeTab === 'analytics' 
+                ? 'bg-red-600 text-white' 
+                : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            30-Day Analytics
           </button>
           <button
             onClick={() => setActiveTab('videos')}
@@ -180,11 +189,20 @@ const YouTubeManager = () => {
                 </div>
               </div>
             </div>
+          </div>        )}
+
+        {/* Analytics Tab */}
+        {activeTab === 'analytics' && (
+          <div className="space-y-6">
+            <YouTubeAnalytics30D 
+              channelId={channelStats?.channel_id} 
+              channelStats={channelStats} 
+            />
           </div>
         )}
 
         {/* Videos Tab */}
-        {activeTab === 'videos' && (          <div className="space-y-6">
+        {activeTab === 'videos' && (<div className="space-y-6">
             <div className="flex justify-between items-center">
               <h2 className="text-2xl font-bold">My Videos</h2>
               <button

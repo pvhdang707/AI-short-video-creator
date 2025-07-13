@@ -1,4 +1,4 @@
-const API_BASE_URL = 'http://localhost:8000/api';
+const API_BASE_URL = process.env.REACT_APP_YOUTUBE_API_BASE_URL || 'http://localhost:8000/api';
 
 class YouTubeService {
   // Lấy danh sách video của kênh
@@ -296,6 +296,71 @@ class YouTubeService {
       throw error;
     }
   }
+
+  // Lấy dữ liệu analytics đơn giản cho kênh (tổng views, subscribers)
+  static async getMyChannelSimpleAnalytics(timeRange = '30d') {
+    try {
+      const params = new URLSearchParams({
+        time_range: timeRange
+      });
+
+      const response = await fetch(`${API_BASE_URL}/youtube/my/analytics/summary/enhanced?${params}`, {
+        method: 'GET',
+        credentials: 'include'
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch simple analytics');
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Error fetching simple analytics:', error);
+      throw error;
+    }
+  }
+
+  // Lấy dữ liệu analytics theo ngày cho biểu đồ
+  static async getMyChannelAnalyticsForChart(timeRange = '30d') {
+    try {
+      const params = new URLSearchParams({
+        time_range: timeRange
+      });
+
+      const response = await fetch(`${API_BASE_URL}/youtube/my/analytics?${params}`, {
+        method: 'GET',
+        credentials: 'include'
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch analytics for chart');
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Error fetching analytics for chart:', error);
+      throw error;
+    }
+  }
+
+  // Test Analytics API access
+  static async testAnalyticsAccess() {
+    try {
+      const response = await fetch(`${API_BASE_URL}/youtube/my/analytics/test`, {
+        method: 'GET',
+        credentials: 'include'
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to test analytics access');
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Error testing analytics access:', error);
+      throw error;
+    }
+  }
 }
 
-export default YouTubeService; 
+export default YouTubeService;

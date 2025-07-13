@@ -19,10 +19,10 @@ const YouTubeChannelButton = ({
             </div>
             <div>
               <h4 className="text-sm font-semibold text-white">
-                {hasChannel ? 'Kênh YouTube của bạn' : 'Chưa có kênh YouTube'}
+                {hasChannel ? 'Your YouTube Channel' : 'No YouTube Channel'}
               </h4>
               <p className="text-red-300 text-xs">
-                {hasChannel ? 'Quản lý và truy cập kênh' : 'Cần tạo kênh để upload video'}
+                {hasChannel ? 'Manage and access channel' : 'Need to create channel to upload videos'}
               </p>
             </div>
           </div>
@@ -38,7 +38,7 @@ const YouTubeChannelButton = ({
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
               )}
             </svg>
-            {hasChannel ? 'Truy cập kênh' : 'Tạo kênh'}
+            {hasChannel ? 'Access Channel' : 'Create Channel'}
           </button>
         </div>
       </div>
@@ -57,13 +57,13 @@ const YouTubeChannelButton = ({
             </div>
             <div>
               <h3 className="text-lg font-bold text-white">
-                {hasChannel ? 'Kênh YouTube của bạn' : 'Chưa có kênh YouTube'}
+                {hasChannel ? 'Your YouTube Channel' : 'No YouTube Channel'}
               </h3>
               <p className="text-red-300 text-sm">
                 {hasChannel ? (
-                  channelData?.title ? `${channelData.title} • ${channelData.subscriber_count || 0} subscribers` : 'Quản lý và truy cập kênh'
+                  channelData?.title ? `${channelData.title} • ${channelData.subscriber_count || 0} subscribers` : 'Manage and access channel'
                 ) : (
-                  'Cần tạo kênh YouTube để upload video'
+                  'Need to create YouTube channel to upload videos'
                 )}
               </p>
             </div>
@@ -71,9 +71,9 @@ const YouTubeChannelButton = ({
           
           <p className="text-gray-300 text-sm mb-4 leading-relaxed">
             {hasChannel ? (
-              'Kênh YouTube của bạn đã được thiết lập. Bạn có thể quản lý video, xem thống kê và tương tác với khán giả.'
+              'Your YouTube channel has been set up. You can manage videos, view analytics, and interact with your audience.'
             ) : (
-              'Để upload video lên YouTube, bạn cần có một kênh YouTube. Hãy tạo kênh YouTube để bắt đầu chia sẻ video của bạn.'
+              'To upload videos to YouTube, you need a YouTube channel. Create a YouTube channel to start sharing your videos.'
             )}
           </p>
           
@@ -89,7 +89,7 @@ const YouTubeChannelButton = ({
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
                 )}
               </svg>
-              {hasChannel ? 'Truy cập kênh YouTube' : 'Tạo kênh YouTube'}
+              {hasChannel ? 'Access YouTube Channel' : 'Create YouTube Channel'}
             </button>
             
           </div>

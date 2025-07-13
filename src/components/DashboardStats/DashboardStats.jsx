@@ -87,55 +87,7 @@ const DashboardStats = ({ stats }) => {
         </div>
       </div>
 
-          {/* Progress Summary */}
-      <div className="bg-gradient-to-r from-gray-800/50 to-gray-700/50 backdrop-blur-sm border border-gray-600/30 rounded-xl p-6">
-        <div className="flex items-center mb-6">
-          <div className="p-2 bg-gradient-to-r from-purple-600/20 to-purple-700/20 rounded-lg mr-3">
-            <svg className="w-5 h-5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-            </svg>
-          </div>
-          <h3 className="text-lg font-semibold text-white">Project Summary</h3>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="text-center group hover:bg-gray-700/30 p-4 rounded-lg transition-all duration-300">
-            <div className="text-3xl font-bold text-blue-400 mb-2 group-hover:scale-110 transition-transform duration-300">
-              {stats.totalScripts > 0 ? Math.round((stats.completedScripts / stats.totalScripts) * 100) : 0}%
-            </div>
-            <div className="text-sm text-gray-400 font-medium">Completion Rate</div>
-            <div className="mt-2 h-1 bg-gray-700 rounded-full overflow-hidden">
-              <div 
-                className="h-full bg-gradient-to-r from-blue-500 to-blue-600 rounded-full transition-all duration-1000" 
-                style={{width: `${stats.totalScripts > 0 ? Math.round((stats.completedScripts / stats.totalScripts) * 100) : 0}%`}}
-              ></div>
-            </div>
-          </div>
-          <div className="text-center group hover:bg-gray-700/30 p-4 rounded-lg transition-all duration-300">
-            <div className="text-3xl font-bold text-yellow-400 mb-2 group-hover:scale-110 transition-transform duration-300">
-              {stats.totalScripts > 0 ? Math.round((stats.draftScripts / stats.totalScripts) * 100) : 0}%
-            </div>
-            <div className="text-sm text-gray-400 font-medium">Projects in Draft</div>
-            <div className="mt-2 h-1 bg-gray-700 rounded-full overflow-hidden">
-              <div 
-                className="h-full bg-gradient-to-r from-yellow-500 to-yellow-600 rounded-full transition-all duration-1000" 
-                style={{width: `${stats.totalScripts > 0 ? Math.round((stats.draftScripts / stats.totalScripts) * 100) : 0}%`}}
-              ></div>
-            </div>
-          </div>
-          <div className="text-center group hover:bg-gray-700/30 p-4 rounded-lg transition-all duration-300">
-            <div className="text-3xl font-bold text-purple-400 mb-2 group-hover:scale-110 transition-transform duration-300">
-              {stats.completedScripts > 0 ? Math.round((stats.youtubeVideos / stats.completedScripts) * 100) : 0}%
-            </div>
-            <div className="text-sm text-gray-400 font-medium">Uploaded to YouTube</div>
-            <div className="mt-2 h-1 bg-gray-700 rounded-full overflow-hidden">
-              <div 
-                className="h-full bg-gradient-to-r from-purple-500 to-purple-600 rounded-full transition-all duration-1000" 
-                style={{width: `${stats.completedScripts > 0 ? Math.round((stats.youtubeVideos / stats.completedScripts) * 100) : 0}%`}}
-              ></div>
-            </div>
-          </div>
-        </div>
-      </div>
+      
     </div>
   );
 };

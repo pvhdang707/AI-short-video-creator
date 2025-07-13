@@ -21,24 +21,37 @@ const YouTubeAnalytics = ({ channelId, channelStats }) => {
     try {
       setLoading(true);
       setError(null);
-        // Get analytics data from API
-      const data = await YouTubeService.getMyChannelAnalyticsDetailed('30d');
-      console.log('YouTube analytics data loaded:', data);
-      setAnalyticsData(data);
+      
+      // Lấy dữ liệu tổng quan với time range 30d
+      const summaryData = await YouTubeService.getMyChannelSimpleAnalytics('30d');
+      console.log('YouTube analytics summary loaded:', summaryData);
+      
+      // Lấy dữ liệu theo ngày cho biểu đồ với time range 30d
+      const chartData = await YouTubeService.getMyChannelAnalyticsForChart('30d');
+      console.log('YouTube analytics chart data loaded:', chartData);
+      
+      // Kết hợp dữ liệu
+      const combinedData = {
+        summary: summaryData,
+        chartData: chartData
+      };
+      
+      setAnalyticsData(combinedData);
       
     } catch (err) {
       console.error('Error loading analytics data:', err);
-      setError('Unable to load analytics data. Please check YouTube Analytics API access.');
+      setError('Unable to load analytics data. Please check your YouTube channel access or try again later.');
     } finally {
       setLoading(false);
     }
   };
 
-  const data = analyticsData || [];  // Calculate total statistics
+  const data = analyticsData?.chartData || [];
+  const summary = analyticsData?.summary || {};
+  
   const totalStats = {
-    views: data.reduce((sum, item) => sum + (item.views || 0), 0),
-    watchTime: data.reduce((sum, item) => sum + (item.watchTime || 0), 0),
-    subscribers: channelStats?.subscriber_count || 0 // Lấy từ channel stats thay vì analytics data
+    views: summary.total_views || 0,
+    subscribers: summary.total_subscribers || 0,
   };
 
   console.log('YouTube Analytics totalStats:', totalStats);
@@ -84,7 +97,7 @@ const YouTubeAnalytics = ({ channelId, channelStats }) => {
     );
   }
 
-  if (!data || data.length === 0) {
+  if (!analyticsData || (!data || data.length === 0)) {
     return (
       <div className="text-center p-8">
         <div className="bg-gray-800 rounded-lg p-6 max-w-md mx-auto">
@@ -113,7 +126,7 @@ const YouTubeAnalytics = ({ channelId, channelStats }) => {
   return (
     <div className="space-y-6">
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="bg-gray-800 rounded-lg p-4">
           <div className="flex items-center justify-between">
             <div>
@@ -128,21 +141,6 @@ const YouTubeAnalytics = ({ channelId, channelStats }) => {
             </div>
           </div>
         </div>
-
-        <div className="bg-gray-800 rounded-lg p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-gray-400 text-sm">Watch Time</p>
-              <p className="text-2xl font-bold text-green-400">{formatWatchTime(totalStats.watchTime)}</p>
-            </div>
-            <div className="w-8 h-8 bg-green-500 rounded-lg flex items-center justify-center">
-              <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            </div>
-          </div>
-        </div>
-
         <div className="bg-gray-800 rounded-lg p-4">
           <div className="flex items-center justify-between">
             <div>
@@ -157,10 +155,12 @@ const YouTubeAnalytics = ({ channelId, channelStats }) => {
           </div>
         </div>
       </div>
-
+      <div className="text-xs text-gray-400 mt-2 mb-4">
+        * Displaying analytics data for the last 30 days. Data may be delayed 1-2 days due to YouTube Analytics API processing.
+      </div>
       {/* Line Chart - Views Over Time */}
       <div className="bg-gray-800 rounded-lg p-4">
-        <h3 className="text-lg font-semibold mb-4">Views Over Time</h3>
+        <h3 className="text-lg font-semibold mb-4">Views Over Time (Last 30 Days)</h3>
         <ResponsiveContainer width="100%" height={300}>
           <LineChart data={data}>
             <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
@@ -192,10 +192,9 @@ const YouTubeAnalytics = ({ channelId, channelStats }) => {
           </LineChart>
         </ResponsiveContainer>
       </div>
-
-      {/* Bar Chart - Watch Time Over Time */}
+      {/* Bar Chart - Subscribers Over Time */}
       <div className="bg-gray-800 rounded-lg p-4">
-        <h3 className="text-lg font-semibold mb-4">Watch Time Over Time</h3>
+        <h3 className="text-lg font-semibold mb-4">Subscribers Gained Over Time (Last 30 Days)</h3>
         <ResponsiveContainer width="100%" height={300}>
           <BarChart data={data}>
             <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
@@ -215,16 +214,11 @@ const YouTubeAnalytics = ({ channelId, channelStats }) => {
                 borderRadius: '8px',
                 color: '#F9FAFB'
               }}
-              formatter={(value) => [formatWatchTime(value), 'Watch Time']}
+              formatter={(value) => [formatNumber(value), 'Subscribers']}
             />
-            <Bar dataKey="watchTime" fill="#10B981" />
+            <Bar dataKey="subscribers" fill="#8B5CF6" />
           </BarChart>
         </ResponsiveContainer>
-      </div>
-
-      {/* Pie Chart - Distribution */}
-      <div className="bg-gray-800 rounded-lg p-4">
-        
       </div>
     </div>
   );

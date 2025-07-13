@@ -37,7 +37,6 @@ const CreateVideoV2 = () => {
       // Khi ở chế độ edit, luôn chuyển đến bước 2 để chỉnh sửa
       setStep(2);
       
-      toast.success('✅ Project data loaded successfully');
       return;
     }
     

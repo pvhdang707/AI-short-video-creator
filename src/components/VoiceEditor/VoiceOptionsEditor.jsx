@@ -248,7 +248,7 @@ const VoiceOptionsEditor = ({
                                     }}
                                     className="text-blue-400 hover:text-blue-300 text-sm"
                                 >
-                                    Đổi file
+                                    Remove
                                 </button>
                             </div>
                             <audio controls src={selectedFile ? URL.createObjectURL(selectedFile) : undefined} className="w-full mt-2" />

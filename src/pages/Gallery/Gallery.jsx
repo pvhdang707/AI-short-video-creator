@@ -11,6 +11,7 @@ import YouTubeVideoList from '../../components/YouTubeVideoList';
 import DashboardStats from '../../components/DashboardStats';
 import YouTubeChannelButton from '../../components/YouTubeChannelButton';
 import YouTubeAnalytics from '../../components/YouTubeAnalytics/YouTubeAnalytics';
+import YouTubeAnalytics30D from '../../components/YouTubeAnalytics30D';
 
 const Dashboard = () => {
   const { user } = useAuth();
@@ -259,15 +260,7 @@ const Dashboard = () => {
                   </div>
                   <span>Recent Projects</span>
                 </h3>
-                <button 
-                  onClick={handleViewAll}
-                  className="group flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-blue-600/20 to-blue-700/20 hover:from-blue-600/30 hover:to-blue-700/30 border border-blue-600/30 hover:border-blue-500 rounded-lg text-blue-400 hover:text-white text-sm font-medium transition-all duration-300"
-                >
-                  <span>View all</span>
-                  <svg className="w-4 h-4 group-hover:translate-x-1 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                  </svg>
-                </button>
+               
               </div>
 
               {scripts.length === 0 ? (
@@ -441,7 +434,11 @@ const Dashboard = () => {
                       </div>
                     </div>
 
-                    <YouTubeAnalytics 
+                    {/* <YouTubeAnalytics
+                      channelId={youtubeStats?.channel_id}
+                      channelStats={youtubeStats}
+                    /> */}
+                    <YouTubeAnalytics30D
                       channelId={youtubeStats?.channel_id}
                       channelStats={youtubeStats}
                     />
